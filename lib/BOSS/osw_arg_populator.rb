@@ -35,6 +35,24 @@ class OSWArgPopulator
   def self.populate_create_bar_from_building_type_ratios_args(osw, bsync_reader)
     osw[:steps].append({"measure_dir_name": "create_bar_from_building_type_ratios", "arguments": {}})
     set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "create_bar_from_building_type_ratios", key, value) }
+
+    # Add args
+    # -  __SKIP__
+    set_measure_argument.call("__SKIP__", false)
+    # -  bldg_type_a
+    set_measure_argument.call("bldg_type_a", bsync_reader.get_building_type)
+    # -  bldg_type_a_num_units
+    # -  bldg_type_b
+    # -  bldg_type_b_fract_bldg_area
+    # -  bldg_type_b_num_units
+    # -  bldg_type_c
+    # -  bldg_type_c_fract_bldg_area
+    # -  bldg_type_c_num_units
+    # -  bldg_type_d
+    # -  bldg_type_d_fract_bldg_area
+    # -  bldg_type_d_num_units
+    # -  total_bldg_floor_area
+    set_measure_argument.call("total_bldg_floor_area", bsync_reader.get_total_floor_area)
   end
 
   def self.populate_create_typical_building_from_model_args(osw, bsync_reader)
@@ -55,5 +73,11 @@ class OSWArgPopulator
   def self.populate_openstudio_results_args(osw, bsync_reader)
     osw[:steps].append({"measure_dir_name": "openstudio_results", "arguments": {}})
     set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "openstudio_results", key, value) }
+
+    # Add args
+    # -  __SKIP__
+    set_measure_argument.call("__SKIP__", false)
+    # -  reg_monthly_details - enable monthly fuel breakdown for results processing
+    set_measure_argument.call("reg_monthly_details", true)
   end
 end

@@ -40,10 +40,10 @@ module BOSS
       OSWArgPopulator::populate_change_building_location_args(baseline_osw, @bsync_reader)
 
       OSWArgPopulator::populate_create_bar_from_building_type_ratios_args(baseline_osw, @bsync_reader)
-      OSWArgPopulator::populate_create_typical_building_from_model_args(baseline_osw, @bsync_reader)
+      # OSWArgPopulator::populate_create_typical_building_from_model_args(baseline_osw, @bsync_reader)
 
-      OSWArgPopulator::populate_set_lighting_loads_by_LPD_args(baseline_osw, @bsync_reader)
-      OSWArgPopulator::populate_set_electric_equipment_loads_by_epd_args(baseline_osw, @bsync_reader)
+      # OSWArgPopulator::populate_set_lighting_loads_by_LPD_args(baseline_osw, @bsync_reader)
+      # OSWArgPopulator::populate_set_electric_equipment_loads_by_epd_args(baseline_osw, @bsync_reader)
       OSWArgPopulator::populate_openstudio_results_args(baseline_osw, @bsync_reader)
 
       # write to file
@@ -55,6 +55,23 @@ module BOSS
     end
 
     def run_baseline_osw
+      # assert we have a baseline osm
+      baseline_osw_path = "#{@output_dir}/baseline/in.osw"
+
+      #  assert baseline exist
+      if !File.file?(baseline_osw_path)
+        error_message = (
+          "this function required #{baseline_owm_path}, which does not exist. "\
+          "Create #{baseline_owm_path} with `write_baseline_osw` and try again."
+        )
+        OpenStudio.logFree(OpenStudio::Error, "BuildingSync.WorkflowMaker.assert_baseline_osw_exists", error_message)
+        raise StandardError, "BuildingSync.WorkflowMaker.assert_baseline_osw_exists: #{error_message}"
+      end
+
+      runner = OpenStudio::Extension::Runner.new(dirname = Dir.pwd, bundle_without = [], options = { run_simulations: true, verbose: false, num_parallel: 7, max_to_run: Float::INFINITY })
+
+      # run the baseline osm
+      return runner.run_osws([baseline_osw_path])
     end
   end
 end

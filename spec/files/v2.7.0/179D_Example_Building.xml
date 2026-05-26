@@ -31,16 +31,6 @@
                   <auc:IdentifierValue>46819</auc:IdentifierValue>
                 </auc:PremisesIdentifier>
               </auc:PremisesIdentifiers>
-              <auc:Address>
-                <auc:StreetAddressDetail>
-                  <auc:Simplified>
-                    <auc:StreetAddress>611 N Franklin St</auc:StreetAddress>
-                  </auc:Simplified>
-                </auc:StreetAddressDetail>
-                <auc:City>San Francisco</auc:City>
-                <auc:State>CA</auc:State>
-                <auc:PostalCode>33602</auc:PostalCode>
-              </auc:Address>
               <auc:ClimateZoneType>
                 <auc:ASHRAE>
                   <auc:ClimateZone>3C</auc:ClimateZone>
