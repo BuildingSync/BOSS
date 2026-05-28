@@ -8,17 +8,17 @@ require 'BOSS/buildingsync_reader/buildingsync_reader'
 
 def wrap_in_site(xml)
   return """
-    <auc:BuildingSync xmlns:auc='http://buildingsync.net/schemas/bedes-auc/2019'>
-      <auc:Facilities>
-        <auc:Facility>
-          <auc:Sites>
-            <auc:Site>
+    <BuildingSync>
+      <Facilities>
+        <Facility>
+          <Sites>
+            <Site>
               #{xml}
-            </auc:Site>
-          </auc:Sites>
-        </auc:Facility>
-      </auc:Facilities>
-    </auc:BuildingSync>
+            </Site>
+          </Sites>
+        </Facility>
+      </Facilities>
+    </BuildingSync>
   """
 end
 
@@ -28,18 +28,18 @@ RSpec.describe 'BuildingSyncReader' do
       # Set Up
       doc = REXML::Document.new wrap_in_site(
           """
-            <auc:ClimateZoneType>
-              <auc:ASHRAE>
-                <auc:ClimateZone>3C</auc:ClimateZone>
-              </auc:ASHRAE>
-              <auc:CaliforniaTitle24>
-                <auc:ClimateZone>Climate Zone 3</auc:ClimateZone>
-              </auc:CaliforniaTitle24>
-            </auc:ClimateZoneType>
-            <auc:Buildings>
-              <auc:Building>
-              </auc:Building>
-            </auc:Buildings>
+            <ClimateZoneType>
+              <ASHRAE>
+                <ClimateZone>3C</ClimateZone>
+              </ASHRAE>
+              <CaliforniaTitle24>
+                <ClimateZone>Climate Zone 3</ClimateZone>
+              </CaliforniaTitle24>
+            </ClimateZoneType>
+            <Buildings>
+              <Building>
+              </Building>
+            </Buildings>
           """
         )
 
@@ -58,18 +58,18 @@ RSpec.describe 'BuildingSyncReader' do
       # Set Up
       doc = REXML::Document.new wrap_in_site(
           """
-            <auc:Buildings>
-              <auc:Building>
-                <auc:ClimateZoneType>
-                  <auc:ASHRAE>
-                    <auc:ClimateZone>3C</auc:ClimateZone>
-                  </auc:ASHRAE>
-                  <auc:CaliforniaTitle24>
-                    <auc:ClimateZone>Climate Zone 3</auc:ClimateZone>
-                  </auc:CaliforniaTitle24>
-                </auc:ClimateZoneType>
-              </auc:Building>
-            </auc:Buildings>
+            <Buildings>
+              <Building>
+                <ClimateZoneType>
+                  <ASHRAE>
+                    <ClimateZone>3C</ClimateZone>
+                  </ASHRAE>
+                  <CaliforniaTitle24>
+                    <ClimateZone>Climate Zone 3</ClimateZone>
+                  </CaliforniaTitle24>
+                </ClimateZoneType>
+              </Building>
+            </Buildings>
           """
         )
 
@@ -88,10 +88,10 @@ RSpec.describe 'BuildingSyncReader' do
       # Set Up
       doc = REXML::Document.new wrap_in_site(
           """
-            <auc:Buildings>
-              <auc:Building>
-              </auc:Building>
-            </auc:Buildings>
+            <Buildings>
+              <Building>
+              </Building>
+            </Buildings>
           """
         )
 
@@ -112,14 +112,14 @@ RSpec.describe 'BuildingSyncReader' do
       # Set Up
       doc = REXML::Document.new wrap_in_site(
           """
-            <auc:Buildings>
-              <auc:Building>
-                <auc:Address>
-                  <auc:City>San Francisco</auc:City>
-                  <auc:State>CA</auc:State>
-                </auc:Address>
-              </auc:Building>
-            </auc:Buildings>
+            <Buildings>
+              <Building>
+                <Address>
+                  <City>San Francisco</City>
+                  <State>CA</State>
+                </Address>
+              </Building>
+            </Buildings>
           """
         )
 
@@ -135,15 +135,15 @@ RSpec.describe 'BuildingSyncReader' do
       # Set Up
       doc = REXML::Document.new wrap_in_site(
         """
-          <auc:Buildings>
-            <auc:Building>
-              <auc:ClimateZoneType>
-                <auc:ASHRAE>
-                  <auc:ClimateZone>3C</auc:ClimateZone>
-                </auc:ASHRAE>
-              </auc:ClimateZoneType>
-            </auc:Building>
-          </auc:Buildings>
+          <Buildings>
+            <Building>
+              <ClimateZoneType>
+                <ASHRAE>
+                  <ClimateZone>3C</ClimateZone>
+                </ASHRAE>
+              </ClimateZoneType>
+            </Building>
+          </Buildings>
         """
       )
 
@@ -164,14 +164,14 @@ RSpec.describe 'BuildingSyncReader' do
       # Set Up
       doc = REXML::Document.new wrap_in_site(
           """
-            <auc:Buildings>
-              <auc:Building>
-                <auc:Address>
-                  <auc:City>San Francisco</auc:City>
-                  <auc:State>CA</auc:State>
-                </auc:Address>
-              </auc:Building>
-            </auc:Buildings>
+            <Buildings>
+              <Building>
+                <Address>
+                  <City>San Francisco</City>
+                  <State>CA</State>
+                </Address>
+              </Building>
+            </Buildings>
           """
         )
 
@@ -187,14 +187,14 @@ RSpec.describe 'BuildingSyncReader' do
       # Set Up
       doc = REXML::Document.new wrap_in_site(
           """
-            <auc:Address>
-              <auc:City>San Francisco</auc:City>
-              <auc:State>CA</auc:State>
-            </auc:Address>
-            <auc:Buildings>
-              <auc:Building>
-              </auc:Building>
-            </auc:Buildings>
+            <Address>
+              <City>San Francisco</City>
+              <State>CA</State>
+            </Address>
+            <Buildings>
+              <Building>
+              </Building>
+            </Buildings>
           """
         )
 
@@ -210,10 +210,10 @@ RSpec.describe 'BuildingSyncReader' do
       # Set Up
       doc = REXML::Document.new wrap_in_site(
           """
-            <auc:Buildings>
-              <auc:Building>
-              </auc:Building>
-            </auc:Buildings>
+            <Buildings>
+              <Building>
+              </Building>
+            </Buildings>
           """
         )
 
@@ -223,6 +223,236 @@ RSpec.describe 'BuildingSyncReader' do
 
       # Assert
       expect([city, state]).to eq [nil, nil]
+    end
+  end
+
+  describe 'get_building_type_and_bar_division_method should' do
+  end
+
+  describe 'get_total_floor_area should' do
+  end
+
+  describe 'get_floor_above_grade should' do
+  end
+
+  describe 'get_floor_below_grade should' do
+  end
+
+  describe 'get_floor_below_grade should' do
+  end
+
+  describe 'get_built_year should' do
+  end
+
+  describe 'get_standard_template should' do
+  end
+
+  describe 'get_floor_to_floor_height should' do
+  end
+
+  describe 'get_aspect_ratio should' do
+  end
+
+  describe 'get_principal_HVAC_system_type should' do
+  end
+
+  describe 'get_total_installed_power should' do
+    def wrap_in_systems(xml)
+      return """
+        <BuildingSync>
+          <Facilities>
+            <Facility>
+              <Sites>
+                <Site>
+                </Site>
+              </Sites>
+              <Systems>
+                #{xml}
+              </Systems>
+            </Facility>
+          </Facilities>
+        </BuildingSync>
+      """
+    end
+
+    it "sum InstalledPower" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(
+          """
+          <LightingSystems>
+            <LightingSystem>
+              <InstalledPower>2</InstalledPower>
+            </LightingSystem>
+            <LightingSystem>
+              <InstalledPower>3</InstalledPower>
+            </LightingSystem>
+          </LightingSystems>
+          """
+        )
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_total_installed_power).to eq 5
+    end
+
+    it "return nil if any LightingSystem has nil InstalledPower" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(
+          """
+          <LightingSystems>
+            <LightingSystem>
+              <InstalledPower>2</InstalledPower>
+            </LightingSystem>
+            <LightingSystem>
+              <InstalledPower>3</InstalledPower>
+            </LightingSystem>
+            <LightingSystem>
+            </LightingSystem>
+          </LightingSystems>
+          """
+        )
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_total_installed_power).to eq nil
+    end
+
+    it "return nil if no LightingSystems" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(
+          """
+          """
+        )
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_total_installed_power).to eq nil
+    end
+
+    it "return nil if no InstalledPower" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(
+          """
+          <LightingSystems>
+            <LightingSystem>
+            </LightingSystem>
+            <LightingSystem>
+            </LightingSystem>
+          </LightingSystems>
+          """
+        )
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_total_installed_power).to eq nil
+    end
+  end
+
+  describe 'get_total_weighted_average_load should' do
+    def wrap_in_systems(xml)
+      return """
+        <BuildingSync>
+          <Facilities>
+            <Facility>
+              <Sites>
+                <Site>
+                </Site>
+              </Sites>
+              <Systems>
+                #{xml}
+              </Systems>
+            </Facility>
+          </Facilities>
+        </BuildingSync>
+      """
+    end
+
+    it "sum weighted average load" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(
+          """
+          <PlugLoads>
+            <PlugLoad>
+              <WeightedAverageLoad>2</WeightedAverageLoad>
+            </PlugLoad>
+            <PlugLoad>
+              <WeightedAverageLoad>3</WeightedAverageLoad>
+            </PlugLoad>
+          </PlugLoads>
+          """
+        )
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_total_weighted_average_load).to eq 5
+    end
+
+    it "return nil if any plugload has nil WeightedAverageLoad" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(
+          """
+          <PlugLoads>
+            <PlugLoad>
+              <WeightedAverageLoad>2</WeightedAverageLoad>
+            </PlugLoad>
+            <PlugLoad>
+              <WeightedAverageLoad>3</WeightedAverageLoad>
+            </PlugLoad>
+            <PlugLoad>
+            </PlugLoad>
+          </PlugLoads>
+          """
+        )
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_total_weighted_average_load).to eq nil
+    end
+
+    it "return nil if no plug loads" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(
+          """
+          """
+        )
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_total_weighted_average_load).to eq nil
+    end
+
+    it "return nil if no WeightedAverageLoad" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(
+          """
+          <PlugLoads>
+            <PlugLoad>
+            </PlugLoad>
+            <PlugLoad>
+            </PlugLoad>
+          </PlugLoads>
+          """
+        )
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_total_weighted_average_load).to eq nil
     end
   end
 end

@@ -1,6 +1,11 @@
+# *******************************************************************************
+# OpenStudio(R), Copyright (c) Alliance for Energy Innovation, LLC.
+# See also https://github.com/BuildingSync/BuildingSync-gem/blob/develop/LICENSE.md
+# *******************************************************************************
 require 'pry'
 
 require 'openstudio-standards'
+require_relative 'systems_map'
 
 require 'boss/buildingsync_reader/bcl_weather_file_downloader'
 include Math
@@ -87,7 +92,8 @@ module BOSS
       return city, state if !city.nil? && !state.nil?
     end
 
-    def get_building_type
+    # Use buildings OccupancyClassification, total_floor_area, and total_number_floors to find a openstudio mapping in building_types_by_occupancy_classification.json
+    def get_building_type_and_bar_division_method
       occupancy_classification = @building_xml.elements["#{@ns}OccupancyClassification"].text
       total_floor_area = get_total_floor_area
       total_number_floors = _get_total_number_floors
@@ -103,7 +109,7 @@ module BOSS
         next if total_number_floors < (building_type[:min_number_floors]&.to_f || 0) # too small!
         next if total_number_floors > (building_type[:max_number_floors]&.to_f || Float::INFINITY) # too big!
 
-        return building_type[:standards_building_type][:"#{@standard_to_be_used}"] # just right!
+        return building_type[:standards_building_type][:"#{@standard_to_be_used}"], building_type[:bar_division_method] # just right!
       end
     end
 
@@ -112,12 +118,14 @@ module BOSS
     #  2. /FloorAreas of site
     def get_total_floor_area
       # check site floor area
+      puts "++ site floor areas ++"
       site_floor_areas_xml = @site_xml.elements["#{@ns}FloorAreas"]
       site_area = !site_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(site_floor_areas_xml) : 0
       return site_area if site_area > 0
 
       # check building floor area
       building_floor_areas_xml = @building_xml.elements["#{@ns}FloorAreas"]
+        puts "++ building floor areas ++"
       building_area = !building_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(building_floor_areas_xml) : 0
       return building_area if building_area > 0
 
@@ -136,8 +144,10 @@ module BOSS
       floor_areas_xml.elements.each("#{@ns}FloorArea") do |floor_area_xml|
         floor_area_type = floor_area_xml.elements["#{@ns}FloorAreaType"].text
         floor_area = floor_area_xml.elements["#{@ns}FloorAreaValue"].text.to_f
+        puts "  #{floor_area_type} #{floor_area} #{OpenStudio.convert(floor_area, 'ft^2', 'm^2').get}"
         floor_area_by_type[floor_area_type] += OpenStudio.convert(floor_area, 'ft^2', 'm^2').get
       end
+      puts floor_area_by_type
 
       # first, try to get it from simply "Gross"
       gross_floor_area = floor_area_by_type["Gross"]
@@ -156,22 +166,146 @@ module BOSS
     end
 
     # tries to get total number floor from:
-    #  1. building's FloorsAboveGrade + FloorsBelowGrade
-    #  2. building's ConditionedFloorsAboveGrade + ConditionedFloorsBelowGrade + UnconditionedFloorsAboveGrade + UnconditionedFloorsBelowGrade
-    def _get_total_number_floors
-      floors_above_grade = @building_xml.elements["#{@ns}FloorsAboveGrade"]&.text.to_f
-      floors_below_grade = @building_xml.elements["#{@ns}FloorsBelowGrade"]&.text.to_f
-      if !floors_above_grade.nil? || !floors_below_grade.nil?
-        return (floors_above_grade || 0) +  (floors_below_grade || 0)
+    #  1. building's FloorsAboveGrade
+    #  2. building's ConditionedFloorsAboveGrade + UnconditionedFloorsAboveGrade
+    def get_floor_above_grade
+      floors_above_grade = @building_xml.elements["#{@ns}FloorsAboveGrade"]&.text
+      return floors_above_grade.to_f  if !floors_above_grade.nil?
+
+      conditioned_floors_above_grade = @building_xml.elements["#{@ns}ConditionedFloorsAboveGrade"]&.text
+      unconditioned_floors_above_grade = @building_xml.elements["#{@ns}UnconditionedFloorsAboveGrade"]&.text
+      if !conditioned_floors_above_grade.nil? || !unconditioned_floors_above_grade.nil?
+        return (conditioned_floors_above_grade.to_f || 0) + (unconditioned_floors_above_grade.to_f || 0)
       end
 
-      conditioned_floors_above_grade = @building_xml.elements["#{@ns}ConditionedFloorsAboveGrade"]&.text.to_f
-      conditioned_floors_below_grade = @building_xml.elements["#{@ns}ConditionedFloorsBelowGrade"]&.text.to_f
-      unconditioned_floors_above_grade = @building_xml.elements["#{@ns}UnConditionedFloorsAboveGrade"]&.text.to_f
-      unconditioned_floors_below_grade = @building_xml.elements["#{@ns}UnConditionedFloorsBelowGrade"]&.text.to_f
-      if !conditioned_floors_above_grade.nil? || !conditioned_floors_below_grade.nil? || !unconditioned_floors_above_grade.nil? || !unconditioned_floors_below_grade.nil?
-        return (conditioned_floors_above_grade || 0) +  (conditioned_floors_below_grade || 0) if !unconditioned_floors_above_grade.nil? || !unconditioned_floors_below_grade.nil?
+      return nil
+    end
+
+    # tries to get total number floor from:
+    #  1. building's FloorsBelowGrade
+    #  2. building's ConditionedFloorsBelowGrade + UnconditionedFloorsBelowGrade
+    def get_floor_below_grade
+      floors_below_grade = @building_xml.elements["#{@ns}FloorsBelowGrade"]&.text
+      return floors_below_grade.to_f  if !floors_below_grade.nil?
+
+      conditioned_floors_below_grade = @building_xml.elements["#{@ns}ConditionedFloorsBelowGrade"]&.text
+      unconditioned_floors_below_grade = @building_xml.elements["#{@ns}UnconditionedFloorsBelowGrade"]&.text
+      if !conditioned_floors_below_grade.nil? || !unconditioned_floors_below_grade.nil?
+        return (conditioned_floors_below_grade.to_f || 0) + (unconditioned_floors_below_grade.to_f || 0)
       end
+
+      return nil
+    end
+
+    def _get_total_number_floors
+      floors_above_grade = get_floor_above_grade
+      floors_below_grade = get_floor_below_grade
+
+      return (floors_above_grade || 1) +  (floors_below_grade || 0)
+    end
+
+
+      # tries to get year built from:
+    #  1. /YearOfLastMajorRemodel of building
+    #  2. /YearOfConstruction of building
+    def get_built_year
+      year_of_major_remodel = @building_xml.elements["#{@ns}YearOfLastMajorRemodel"]&.text.to_f
+      return year_of_major_remodel if !year_of_major_remodel.nil?
+
+      year_of_construction = @building_xml.elements["#{@ns}YearOfConstruction"]&.text.to_f
+      return year_of_construction if !year_of_construction.nil?
+    end
+
+    #  map year built and standard_to_be_used to a standard_template
+    def get_standard_template
+      built_year = get_built_year
+      if @standard_to_be_used == CA_TITLE24
+        return "DEER Pre-1975" if built_year < 1975
+        return "DEER 1985" if built_year >= 1975 && built_year < 1985
+        return "DEER 1996" if built_year >= 1985 && built_year < 1996
+        return "DEER 2003" if built_year >= 1996 && built_year < 2003
+        return "DEER 2007" if built_year >= 2003 && built_year < 2007
+        return "DEER 2011" if built_year >= 2007 && built_year < 2011
+        return "DEER 2014" if built_year >= 2011 && built_year < 2014
+        return "DEER 2015" if built_year >= 2014 && built_year < 2015
+        return "DEER 2017" if built_year >= 2015 && built_year < 2017
+        return "DEER 2020"
+
+      elsif (@standard_to_be_used == ASHRAE90_1)
+        return "DOE Ref Pre-1980" if built_year < 1980
+        return "DOE Ref 1980-2004" if built_year >= 1980 && built_year < 2004
+        return "90.1-2007" if built_year >= 2004 && built_year < 2007
+        return "90.1-2010" if built_year >= 2007 && built_year < 2010
+        return "90.1-2013" if built_year >= 2010 && built_year < 2013
+        return "90.1-2016" if built_year >= 2013 && built_year < 2016
+        return "90.1-2019"
+      end
+    end
+
+    def get_floor_to_floor_height
+      section_elements = @building_xml.elements.each("#{@ns}Sections/#{@ns}Section"){|s| s}
+      return nil if section_elements.nil?
+      floor_to_floor_heights = section_elements.map {|section_element| section_element.elements["#{@ns}FloorToFloorHeight"]&.text.to_f}
+
+      return floor_to_floor_heights.first
+    end
+
+    def get_aspect_ratio
+      aspect_ratio = @building_xml.elements["#{@ns}AspectRatio"]&.text
+      return nil if aspect_ratio.nil?
+      return aspect_ratio.to_f
+    end
+
+    # get principal hvac system type
+    # @return [String]
+    def get_principal_HVAC_system_type
+      # if no hvac systems, return nil
+      hvac_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}HVACSystems/#{@ns}HVACSystem") {|s| s}
+      return nil if hvac_systems.nil?
+
+      # find first none nil principal_HVAC_system_type
+      hvac_systems = hvac_systems.reject {|s| s.class == REXML::Comment}
+      principal_HVAC_system_type = hvac_systems.map {|s| s.elements["#{@ns}PrincipalHVACSystemType/"]&.text}
+      first_principal_HVAC_system_type = principal_HVAC_system_type.find {|x| !x.nil?}
+
+      # if none, return nil, else return mapping
+      return nil if first_principal_HVAC_system_type.nil?
+      return BuildingSyncToOSSystemMaps.get_hvac_map[first_principal_HVAC_system_type.to_s]
+    end
+
+    # get sum of /Systems/LightingSystems/LightingSystem/InstalledPower
+    # @return [String]
+    def get_total_installed_power
+      # if no lighting systems, return nil
+      lighting_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}LightingSystems/#{@ns}LightingSystem") {|s| s}
+      return nil if lighting_systems.nil?
+
+      # get all all_installed_powers
+      lighting_systems = lighting_systems.reject {|s| s.class == REXML::Comment}
+      all_installed_powers = lighting_systems.map {|s| s.elements["#{@ns}InstalledPower/"]&.first&.to_s&.to_f}
+
+      # if any nil, return nil, else return sum
+      return nil if all_installed_powers.length == 0
+      return nil if !all_installed_powers.all?
+      return all_installed_powers.sum
+    end
+
+    # get sum of /Systems/LightingSystems/PlugLoads/WeightedAverageLoad
+    # @return [String]
+    def get_total_weighted_average_load
+      # if no plug_loads, return nil
+      plug_loads = @facility_xml.elements.each("#{@ns}Systems/#{@ns}PlugLoads/#{@ns}PlugLoad") {|s| s}
+      return nil if plug_loads.nil?
+
+      # get all weighted_average_loads
+      plug_loads = plug_loads.reject {|s| s.class == REXML::Comment}
+      all_weighted_average_loads = plug_loads.map {|s| s.elements["#{@ns}WeightedAverageLoad/"]&.text}
+
+
+      # if any nil, return nil, else return sum
+      return nil if all_weighted_average_loads.length == 0
+      return nil if !all_weighted_average_loads.all?
+      return all_weighted_average_loads.map {|s| s.to_f}.sum
     end
   end
 end

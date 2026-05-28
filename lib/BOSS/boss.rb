@@ -1,8 +1,17 @@
+# *******************************************************************************
+# OpenStudio(R), Copyright (c) Alliance for Energy Innovation, LLC.
+# See also https://github.com/BuildingSync/BuildingSync-gem/blob/develop/LICENSE.md
+# *******************************************************************************
+
 require 'json'
 require 'rexml/document'
 
 require 'BOSS/buildingsync_reader/buildingsync_reader'
 require 'BOSS/osw_arg_populator'
+
+require 'openstudio/common_measures'
+require 'openstudio/model_articulation'
+require 'openstudio/ee_measures'
 
 module BOSS
   class Boss
@@ -40,10 +49,10 @@ module BOSS
       OSWArgPopulator::populate_change_building_location_args(baseline_osw, @bsync_reader)
 
       OSWArgPopulator::populate_create_bar_from_building_type_ratios_args(baseline_osw, @bsync_reader)
-      # OSWArgPopulator::populate_create_typical_building_from_model_args(baseline_osw, @bsync_reader)
+      OSWArgPopulator::populate_create_typical_building_from_model_args(baseline_osw, @bsync_reader)
 
-      # OSWArgPopulator::populate_set_lighting_loads_by_LPD_args(baseline_osw, @bsync_reader)
-      # OSWArgPopulator::populate_set_electric_equipment_loads_by_epd_args(baseline_osw, @bsync_reader)
+      OSWArgPopulator::populate_set_lighting_loads_by_LPD_args(baseline_osw, @bsync_reader)
+      OSWArgPopulator::populate_set_electric_equipment_loads_by_epd_args(baseline_osw, @bsync_reader)
       OSWArgPopulator::populate_openstudio_results_args(baseline_osw, @bsync_reader)
 
       # write to file

@@ -2,3 +2,4 @@
 vendor
 spec/output
 weather
+.ruby-version
