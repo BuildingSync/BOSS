@@ -1,0 +1,5 @@
+#!/usr/bin/ ruby
+
+require 'boss_cli'
+
+boss_commands = BOSS::CLI.start(ARGV)
