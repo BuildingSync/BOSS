@@ -1,7 +1,34 @@
 # BOSS
-BuildingSync OpenStudio Simulator
+
+BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates OpenStudio workflows from their contents, and runs those workflows to create models.
+
+
+1. Install OpenStudio 3.10. Check installation with 
+    ```console
+    🌟 openstudio --version
+    3.10.0+ce46db07de
+    ```
+
+2. Set enviroment variable `RUBYLIB` to the location of your openstudio installation. Check env var with:
+    ```console
+    🌟 echo $RUBYLIB
+    /Applications/OpenStudio-3.10.0/Ruby
+    ```
+
+3. From local repo, bundle install
+
+    ```bash
+    🌟 bundle install
+    ```
 
 ## How to Use
+
+## OpenStudio Compatibility Version
+
+| OpenStudio Version | BuildingSync Version | BOSS Version |
+|-------------------|---------------|
+| 3.10  | 2.7.0 | Initial Version |
+
 
 ## Tests
 [set_run_period]: https://github.com/NatLabRockies/openstudio-common-measures-gem/blob/v0.12.3/lib/measures/set_run_period/README.md

@@ -15,7 +15,7 @@ require 'stringio'
 
 module BOSS
   class BCLWeatherFileDownloader
-    @@base_BCL_uri = 'https://bcl.nrel.gov/api/search'
+    @@base_BCL_uri = 'https://bcl.nlr.gov/api/search'
     @@base_EP_uri = 'https://energyplus-weather.s3.amazonaws.com/north_and_central_america_wmo_region_4'
 
     def self.download_weather_file_from_city_name(city_name, state_name)

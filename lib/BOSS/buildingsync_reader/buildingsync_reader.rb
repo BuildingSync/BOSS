@@ -133,6 +133,7 @@ module BOSS
     end
 
     # tries to get total floor area from:
+    # measure expects floor area in ft2. XML floor area expected to be in ft2 as well (no conversion needed at this time)
     #  1. Gross floor area
     #  2. Sum of "Conditioned" + "Common" + "Heated and Cooled" + "Heated Only" + "Cooled Only" floor area
     #  3. Sum of "Conditioned above grade" + "Conditioned below grade" floor area
@@ -144,8 +145,8 @@ module BOSS
       floor_areas_xml.elements.each("#{@ns}FloorArea") do |floor_area_xml|
         floor_area_type = floor_area_xml.elements["#{@ns}FloorAreaType"].text
         floor_area = floor_area_xml.elements["#{@ns}FloorAreaValue"].text.to_f
-        puts "  #{floor_area_type} #{floor_area} #{OpenStudio.convert(floor_area, 'ft^2', 'm^2').get}"
-        floor_area_by_type[floor_area_type] += OpenStudio.convert(floor_area, 'ft^2', 'm^2').get
+        # puts "  #{floor_area_type} #{floor_area} #{OpenStudio.convert(floor_area, 'ft^2', 'm^2').get}"
+        floor_area_by_type[floor_area_type] += floor_area
       end
       puts floor_area_by_type
 
