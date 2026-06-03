@@ -19,8 +19,8 @@ Gem::Specification.new do |spec|
   spec.files         = Dir.chdir(File.expand_path(__dir__)) do
     `git ls-files -z`.force_encoding('UTF-8').split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
   end
-  spec.bindir        = 'exe'
-  spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
+  spec.bindir        = 'bin'
+  spec.executables   = ['boss']
   spec.require_paths = ['lib']
 
   spec.add_dependency 'bundler', '~> 2.4.10'
@@ -29,6 +29,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'openstudio-extension', '~> 0.9.4'
   spec.add_dependency 'openstudio-model-articulation', '~> 0.12.2'
   spec.add_dependency 'httparty', '~> 0.23.2'
+  spec.add_dependency 'thor', '~> 1.5.0'
 
   spec.add_development_dependency 'rspec', '~> 3.13'
   spec.add_development_dependency 'pry', '~> 0.15.2'

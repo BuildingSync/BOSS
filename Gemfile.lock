@@ -21,6 +21,7 @@ PATH
       openstudio-ee (~> 0.12.5)
       openstudio-extension (~> 0.9.4)
       openstudio-model-articulation (~> 0.12.2)
+      thor (~> 1.5.0)
 
 GEM
   remote: https://rubygems.org/
@@ -160,6 +161,7 @@ GEM
       json-schema (~> 4)
       osut (~> 0)
       topolys (~> 0)
+    thor (1.5.0)
     topolys (0.6.2)
       matrix
     uuid (2.3.9)
