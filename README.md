@@ -21,7 +21,6 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
     🌟 bundle install
     ```
 
-## How to Use
 
 ## OpenStudio Compatibility Version
 
@@ -30,7 +29,9 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
 | 3.10  | 2.7.0 | Initial Version |
 
 
-## Tests
+## L100 Audit Workflow
+
+### Measures used to translate L100 Audit XML file to an OpenStudio model
 [set_run_period]: https://github.com/NatLabRockies/openstudio-common-measures-gem/blob/v0.12.3/lib/measures/set_run_period/README.md
 [ChangeBuildingLocation]: https://github.com/NatLabRockies/openstudio-common-measures-gem/blob/v0.12.3/lib/measures/ChangeBuildingLocation/README.md
 [create_bar_from_building_type_ratios]: https://github.com/NatLabRockies/openstudio-model-articulation-gem/blob/v0.12.2/lib/measures/create_bar_from_building_type_ratios/README.md
