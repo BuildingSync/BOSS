@@ -1,3 +1,9 @@
+# *******************************************************************************
+# OpenStudio(R), Copyright (c) Alliance for Energy Innovation, LLC.
+# BuildingSync(R), Copyright (c) Alliance for Energy Innovation, LLC.
+# See also https://github.com/BuildingSync/BOSS/blob/develop/LICENSE.md
+# *******************************************************************************
+
 require "thor"
 require 'BOSS/boss'
 require 'BOSS/constants'

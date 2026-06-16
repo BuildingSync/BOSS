@@ -1,17 +1,4 @@
 PATH
-  remote: ../OpenStudio-extension-gem
-  specs:
-    openstudio-extension (0.9.7)
-      addressable (= 2.8.1)
-      bcl (~> 0.9.1)
-      bundler (= 2.4.10)
-      octokit (~> 4.18.0)
-      openstudio-workflow (~> 2.5.0)
-      openstudio_measure_tester (~> 0.5.0)
-      parallel (~> 1.19.1)
-      regexp_parser (= 2.9.0)
-
-PATH
   remote: .
   specs:
     BOSS (0.1.0)
@@ -76,6 +63,7 @@ GEM
       csv
       mini_mime (>= 1.0.0)
       multi_xml (>= 0.5.2)
+    json (2.19.9)
     json-schema (4.3.1)
       addressable (>= 2.8)
     macaddr (1.7.2)
@@ -106,6 +94,15 @@ GEM
       multipart-post (= 2.4.0)
       openstudio-extension (~> 0.9.3)
       openstudio-standards (= 0.8.2)
+    openstudio-extension (0.9.4)
+      addressable (= 2.8.1)
+      bcl (~> 0.9.1)
+      bundler (= 2.4.10)
+      octokit (~> 4.18.0)
+      openstudio-workflow (~> 2.5.0)
+      openstudio_measure_tester (~> 0.5.0)
+      parallel (~> 1.19.1)
+      regexp_parser (= 2.9.0)
     openstudio-model-articulation (0.12.2)
       bundler (~> 2.4.10)
       multipart-post (= 2.4.0)
@@ -130,6 +127,7 @@ GEM
       coderay (~> 1.1)
       method_source (~> 1.0)
     public_suffix (5.1.1)
+    rainbow (3.1.1)
     rake (13.4.2)
     rchardet (1.10.0)
     regexp_parser (2.9.0)
@@ -147,6 +145,18 @@ GEM
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.13.0)
     rspec-support (3.13.7)
+    rubocop (1.50.0)
+      json (~> 2.3)
+      parallel (~> 1.10)
+      parser (>= 3.2.0.0)
+      rainbow (>= 2.2.2, < 4.0)
+      regexp_parser (>= 1.8, < 3.0)
+      rexml (>= 3.2.5, < 4.0)
+      rubocop-ast (>= 1.28.0, < 2.0)
+      ruby-progressbar (~> 1.7)
+      unicode-display_width (>= 2.4.0, < 3.0)
+    rubocop-ast (1.30.0)
+      parser (>= 3.2.1.0)
     ruby-ole (1.2.13.1)
     ruby-progressbar (1.13.0)
     ruby2_keywords (0.0.5)
@@ -164,6 +174,7 @@ GEM
     thor (1.5.0)
     topolys (0.6.2)
       matrix
+    unicode-display_width (2.6.0)
     uuid (2.3.9)
       macaddr (~> 1.0)
     yamler (0.1.0)
@@ -175,9 +186,10 @@ PLATFORMS
 
 DEPENDENCIES
   BOSS!
-  openstudio-extension!
   pry (~> 0.15.2)
+  rake (~> 13.0)
   rspec (~> 3.13)
+  rubocop (= 1.50)
 
 BUNDLED WITH
    2.4.10

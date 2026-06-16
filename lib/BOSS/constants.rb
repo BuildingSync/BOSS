@@ -2,7 +2,8 @@
 
 # *******************************************************************************
 # OpenStudio(R), Copyright (c) Alliance for Energy Innovation, LLC.
-# See also https://github.com/BuildingSync/BuildingSync-gem/blob/develop/LICENSE.md
+# BuildingSync(R), Copyright (c) Alliance for Energy Innovation, LLC.
+# See also https://github.com/BuildingSync/BOSS/blob/develop/LICENSE.md
 # *******************************************************************************
 
 SCHEMA_2_0_URL = 'https://raw.githubusercontent.com/BuildingSync/schema/v2.0/BuildingSync.xsd'

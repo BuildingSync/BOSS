@@ -31,6 +31,8 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'httparty', '~> 0.23.2'
   spec.add_dependency 'thor', '~> 1.5.0'
 
+  spec.add_development_dependency 'rake', '~> 13.0'
   spec.add_development_dependency 'rspec', '~> 3.13'
+  spec.add_development_dependency 'rubocop', '1.50'
   spec.add_development_dependency 'pry', '~> 0.15.2'
 end
