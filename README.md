@@ -26,7 +26,7 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
 ## OpenStudio Compatibility Version
 
 | OpenStudio Version | BuildingSync Version | BOSS Version |
-|-------------------|---------------|
+|-------------------|---------------|----------|
 | 3.10  | 2.7.0 | Initial Version |
 
 

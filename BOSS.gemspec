@@ -7,11 +7,11 @@ require 'BOSS/version'
 Gem::Specification.new do |spec|
   spec.name          = 'BOSS'
   spec.version       = BOSS::VERSION
-  spec.authors       = ['Nicholas Long', 'Cory Mosiman', 'Dan Macumber', 'Katherine Fleming', 'Hannah Eslinger']
-  spec.email         = ['nicholas.long@nrel.gov', 'cory.mosiman@nrel.gov', 'daniel.macumber@nrel.gov', 'katherine.fleming@nrel.gov', 'hannah.eslinger@nrel.gov']
+  spec.authors       = ['Hannah Eslinger', 'Katherine Fleming']
+  spec.email         = ['hannah.eslinger@nlr.gov', 'katherine.fleming@nlr.gov']
 
-  spec.summary       = 'BuildingSync library for reading, writing, and exporting BuildingSync to OpenStudio'
-  spec.description   = 'BuildingSync library for reading, writing, and exporting BuildingSync to OpenStudio'
+  spec.summary       = 'Library for reading, writing, and exporting BuildingSync to OpenStudio'
+  spec.description   = 'Library for reading, writing, and exporting BuildingSync to OpenStudio'
   spec.homepage      = 'https://buildingsync.net'
 
   # Specify which files should be added to the gem when it is released.
