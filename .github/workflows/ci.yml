@@ -1,0 +1,28 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "develop"
+    tags:
+      - '*'
+
+jobs:
+  tests:
+    name: Tests
+    container: nrel/openstudio:3.10.0
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+    - name: Setup
+      run: |
+        gem install bundler -v 2.4.10
+        bundle install
+    - name: Run Integration Tests
+      run: bundle exec rspec spec/tests/integration/write_and_run_osws_spec.rb
+      if: always()
+    - name: Run Unit Tests
+      run: bundle exec rspec spec/tests/unit/buildingsync_reader_spec.rb
+      if: always()
