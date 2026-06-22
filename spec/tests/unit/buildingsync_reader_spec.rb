@@ -125,6 +125,7 @@ RSpec.describe 'BuildingSyncReader' do
         )
 
       # Action
+      allow(BOSS::BCLWeatherFileDownloader).to receive(:download_weather_file_from_city_name).with("San Francisco", "CA").and_return(openstudio_weather_file_path)
       buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
       epw_file_path = buidingsync_reader.get_epw_file_path
 

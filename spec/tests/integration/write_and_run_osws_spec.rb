@@ -35,6 +35,10 @@ test_configs = [
 
 RSpec.describe 'BOSS' do
   describe 'boss should' do
+    before do
+      allow(BOSS::BCLWeatherFileDownloader).to receive(:download_weather_file_from_city_name).and_return(openstudio_weather_file_path)
+    end
+
     test_configs.each do |test_config|
       (file_name, standard, epw_path, schema_version) = test_config
 
