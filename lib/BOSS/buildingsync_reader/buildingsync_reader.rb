@@ -7,7 +7,6 @@
 require 'pry'
 require 'openstudio-standards'
 require_relative 'systems_map'
-
 require_relative 'bcl_weather_file_downloader'
 include Math
 
