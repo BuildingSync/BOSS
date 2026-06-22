@@ -23,6 +23,7 @@ jobs:
       run: |
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
         gem install bundler -v 2.4.10
+        bundle config set --local path "$GITHUB_WORKSPACE/.bundle/install"
         bundle install
     - name: Run Integration Tests
       run: bundle exec rspec spec/tests/integration/write_and_run_osws_spec.rb
