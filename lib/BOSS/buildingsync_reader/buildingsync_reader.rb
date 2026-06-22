@@ -3,8 +3,8 @@
 # BuildingSync(R), Copyright (c) Alliance for Energy Innovation, LLC.
 # See also https://github.com/BuildingSync/BOSS/blob/develop/LICENSE.md
 # *******************************************************************************
-require 'pry'
 
+require 'pry'
 require 'openstudio-standards'
 require_relative 'systems_map'
 

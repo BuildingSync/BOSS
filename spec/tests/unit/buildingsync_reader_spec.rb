@@ -3,6 +3,7 @@
 # BuildingSync(R), Copyright (c) Alliance for Energy Innovation, LLC.
 # See also https://github.com/BuildingSync/BOSS/blob/develop/LICENSE.md
 # *******************************************************************************
+
 require 'tempfile'
 require 'BOSS/buildingsync_reader/buildingsync_reader'
 

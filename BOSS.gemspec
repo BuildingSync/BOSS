@@ -28,6 +28,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'openstudio-ee', '~> 0.12.5'
   spec.add_dependency 'openstudio-extension', '~> 0.9.4'
   spec.add_dependency 'openstudio-model-articulation', '~> 0.12.2'
+  spec.add_dependency 'openstudio-standards', '~> 0.8.2'
   spec.add_dependency 'httparty', '~> 0.23.2'
   spec.add_dependency 'thor', '~> 1.5.0'
 
