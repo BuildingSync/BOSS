@@ -75,3 +75,70 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
 |                                        | epd                     | get_total_weighted_average_load           | `/WeightedAverageLoad` in ALL instances of `.../Systems/PlugLoads/PlugLoad`                                                    |
 | [openstudio_results]                   |                         |                                                                                                                                   |
 
+## Tests
+
+## CLI Usage (`boss_cli`)
+
+The repo includes a Thor-based CLI in `lib/boss_cli.rb`, registered as the `boss` executable in the gemspec.
+
+From the repository root, run:
+
+```bash
+bundle exec boss help
+```
+
+### Commands
+
+```bash
+bundle exec boss write_baseline_osw BUILDINGSYNC_FILE -o OUTPUT_PATH [options]
+bundle exec boss run_osw BUILDINGSYNC_FILE -o OUTPUT_PATH [options]
+```
+
+### Options
+
+- `-o`, `--output_path` (required): root directory where BOSS writes output; a subfolder named after the XML file is created automatically
+- `-w`, `--epw_path` (optional): path to a weather `.epw` file; if omitted, BOSS derives weather from the BuildingSync file when possible
+- `-v`, `--standard_version` (optional): modeling standard used by BOSS, such as `ASHRAE90.1` or `CaliforniaTitle24` (defaults to `ASHRAE90.1`)
+- `-r`, `--run` (optional, `write_baseline_osw` only): run the baseline workflow after writing the OSW
+
+### Example: Write a baseline OSW
+
+This example uses a BuildingSync fixture already in the repo:
+
+```bash
+bundle exec boss write_baseline_osw \
+    "spec/files/v2.7.0/L100_Audit-1.0.0.xml" \
+    -o output/v2.7.0
+```
+
+### Example: Write and run with an explicit weather file
+
+```bash
+bundle exec boss write_baseline_osw \
+    "spec/files/v2.7.0/Chula_Vista_ASHRAE_L2_Example_Building.xml" \
+    -o output/v2.7.0 \
+    -v ASHRAE90.1 \
+    -w weather/USA_CA_Chula.Vista-Brown.Field.Muni.AP.722904_TMY3.epw \
+    -r
+```
+
+### Example: Run an existing baseline OSW
+
+Use this when `output/v2.7.0/L100_Audit-1.0.0/baseline/in.osw` already exists:
+
+```bash
+bundle exec boss run_osw \
+    "spec/files/v2.7.0/L100_Audit-1.0.0.xml" \
+    -o output/v2.7.0
+```
+
+### Notes
+
+- If your file path contains spaces, wrap it in quotes.
+- The gem's executables are registered in the gemspec, so `bundle exec boss` works directly.
+- The baseline OSW is written under `output_path/<xml-file-stem>/baseline/in.osw`.
+
+```bash
+bundle exec boss write_baseline_osw "spec/files/v2.7.0/L100_Audit-1.0.0.xml" -o output/v2.7.0
+```
+

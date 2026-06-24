@@ -8,6 +8,7 @@ PATH
       openstudio-ee (~> 0.12.5)
       openstudio-extension (~> 0.9.4)
       openstudio-model-articulation (~> 0.12.2)
+      openstudio-standards (~> 0.8.2)
       thor (~> 1.5.0)
 
 GEM

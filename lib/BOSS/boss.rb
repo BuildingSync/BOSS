@@ -23,6 +23,7 @@ module BOSS
     def initialize(xml_file_path, output_dir, epw_file_path, standard_to_be_used)
       @xml_file_path = xml_file_path
       @output_dir = output_dir
+      @xml_file_stem = File.basename(xml_file_path, File.extname(xml_file_path))
       @epw_file_path = epw_file_path
       @standard_to_be_used = standard_to_be_used
 
@@ -57,16 +58,18 @@ module BOSS
       OSWArgPopulator::populate_openstudio_results_args(baseline_osw, @bsync_reader)
 
       # write to file
-      workflow_dir = File.join(@output_dir, 'baseline')
+      workflow_dir = File.join(@output_dir, @xml_file_stem, 'baseline')
       FileUtils.mkdir_p(workflow_dir)
-      File.open(File.join(workflow_dir, 'in.osw'), 'w') do |file|
+      osw_path = File.join(workflow_dir, 'in.osw')
+      File.open(osw_path, 'w') do |file|
         file << JSON.pretty_generate(baseline_osw)
       end
+      osw_path
     end
 
     def run_baseline_osw
       # assert we have a baseline osm
-      baseline_osw_path = "#{@output_dir}/baseline/in.osw"
+      baseline_osw_path = File.join(@output_dir, @xml_file_stem, 'baseline', 'in.osw')
 
       #  assert baseline exist
       if !File.file?(baseline_osw_path)
