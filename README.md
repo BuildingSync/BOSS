@@ -5,20 +5,20 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
 
 1. Install OpenStudio 3.10. Check installation with 
     ```console
-    🌟 openstudio --version
+    openstudio --version
     3.10.0+ce46db07de
     ```
 
 2. Set enviroment variable `RUBYLIB` to the location of your openstudio installation. Check env var with:
     ```console
-    🌟 echo $RUBYLIB
+    echo $RUBYLIB
     /Applications/OpenStudio-3.10.0/Ruby
     ```
 
 3. From local repo, bundle install
 
     ```bash
-    🌟 bundle install
+    bundle install
     ```
 
 
@@ -31,6 +31,8 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
 
 ## L100 Audit Workflow
 
+The following section describes the data extracted from a BuildingSync XML file and applied to the OpenStudio model via measures, as well as the list of measures used to create the OpenStudio workflow.
+
 ### Measures used to translate L100 Audit XML file to an OpenStudio model
 [set_run_period]: https://github.com/NatLabRockies/openstudio-common-measures-gem/blob/v0.12.3/lib/measures/set_run_period/README.md
 [ChangeBuildingLocation]: https://github.com/NatLabRockies/openstudio-common-measures-gem/blob/v0.12.3/lib/measures/ChangeBuildingLocation/README.md
@@ -39,6 +41,8 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
 [SetLightingLoadsByLPD]: https://github.com/NatLabRockies/openstudio-common-measures-gem/blob/v0.12.3/lib/measures/SetLightingLoadsByLPD/README.md
 [set_electric_equipment_loads_by_epd]: https://github.com/NatLabRockies/openstudio-common-measures-gem/tree/v0.12.3/lib/measures/set_electric_equipment_loads_by_epd
 [openstudio_results]: https://github.com/NatLabRockies/openstudio-common-measures-gem/blob/v0.12.3/lib/measures/openstudio_results/README.md
+
+The table below maps in detail the BuildingSync XML data to measure inputs. Note that this is not always a one-to-one relationship. In the table below:
 
 - read `.../Facility` as `/BuildingSync/Facilities/Facility`
 - read `.../Systems` as `/BuildingSync/Facilities/Facility/Systems`
@@ -75,7 +79,6 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
 |                                        | epd                     | get_total_weighted_average_load           | `/WeightedAverageLoad` in ALL instances of `.../Systems/PlugLoads/PlugLoad`                                                    |
 | [openstudio_results]                   |                         |                                                                                                                                   |
 
-## Tests
 
 ## CLI Usage (`boss_cli`)
 
@@ -101,7 +104,7 @@ bundle exec boss run_osw BUILDINGSYNC_FILE -o OUTPUT_PATH [options]
 - `-v`, `--standard_version` (optional): modeling standard used by BOSS, such as `ASHRAE90.1` or `CaliforniaTitle24` (defaults to `ASHRAE90.1`)
 - `-r`, `--run` (optional, `write_baseline_osw` only): run the baseline workflow after writing the OSW
 
-### Example: Write a baseline OSW
+### CLI Example: Write a baseline OSW
 
 This example uses a BuildingSync fixture already in the repo:
 
@@ -111,7 +114,7 @@ bundle exec boss write_baseline_osw \
     -o output/v2.7.0/L100_Audit-1.0.0
 ```
 
-### Example: Write and run with an explicit weather file
+### CLI Example: Write and run with an explicit weather file
 
 ```bash
 bundle exec boss write_baseline_osw \
@@ -122,7 +125,7 @@ bundle exec boss write_baseline_osw \
     -r
 ```
 
-### Example: Run an existing baseline OSW
+### CLI Example: Run an existing baseline OSW
 
 Use this when `output/v2.7.0/L100_Audit-1.0.0/baseline/in.osw` already exists:
 
@@ -135,10 +138,17 @@ bundle exec boss run_osw \
 ### Notes
 
 - If your file path contains spaces, wrap it in quotes.
-- The gem's executables are registered in the gemspec, so `bundle exec boss` works directly.
 - The baseline OSW is written under `output_path/baseline/in.osw`.
 
+Example: 
 ```bash
 bundle exec boss write_baseline_osw "spec/files/v2.7.0/L100_Audit-1.0.0.xml" -o output/v2.7.0/L100_Audit-1.0.0
 ```
 
+## Tests
+
+To run the tests you can use the Rake task:
+
+```bash
+bundle exec rake
+```
