@@ -96,7 +96,7 @@ bundle exec boss run_osw BUILDINGSYNC_FILE -o OUTPUT_PATH [options]
 
 ### Options
 
-- `-o`, `--output_path` (required): root directory where BOSS writes output; a subfolder named after the XML file is created automatically
+- `-o`, `--output_path` (required): directory where BOSS writes output (for example, use an XML-specific folder such as `output/v2.7.0/L100_Audit-1.0.0`)
 - `-w`, `--epw_path` (optional): path to a weather `.epw` file; if omitted, BOSS derives weather from the BuildingSync file when possible
 - `-v`, `--standard_version` (optional): modeling standard used by BOSS, such as `ASHRAE90.1` or `CaliforniaTitle24` (defaults to `ASHRAE90.1`)
 - `-r`, `--run` (optional, `write_baseline_osw` only): run the baseline workflow after writing the OSW
@@ -108,7 +108,7 @@ This example uses a BuildingSync fixture already in the repo:
 ```bash
 bundle exec boss write_baseline_osw \
     "spec/files/v2.7.0/L100_Audit-1.0.0.xml" \
-    -o output/v2.7.0
+    -o output/v2.7.0/L100_Audit-1.0.0
 ```
 
 ### Example: Write and run with an explicit weather file
@@ -116,7 +116,7 @@ bundle exec boss write_baseline_osw \
 ```bash
 bundle exec boss write_baseline_osw \
     "spec/files/v2.7.0/Chula_Vista_ASHRAE_L2_Example_Building.xml" \
-    -o output/v2.7.0 \
+    -o output/v2.7.0/Chula_Vista_ASHRAE_L2_Example_Building \
     -v ASHRAE90.1 \
     -w weather/USA_CA_Chula.Vista-Brown.Field.Muni.AP.722904_TMY3.epw \
     -r
@@ -129,16 +129,16 @@ Use this when `output/v2.7.0/L100_Audit-1.0.0/baseline/in.osw` already exists:
 ```bash
 bundle exec boss run_osw \
     "spec/files/v2.7.0/L100_Audit-1.0.0.xml" \
-    -o output/v2.7.0
+    -o output/v2.7.0/L100_Audit-1.0.0
 ```
 
 ### Notes
 
 - If your file path contains spaces, wrap it in quotes.
 - The gem's executables are registered in the gemspec, so `bundle exec boss` works directly.
-- The baseline OSW is written under `output_path/<xml-file-stem>/baseline/in.osw`.
+- The baseline OSW is written under `output_path/baseline/in.osw`.
 
 ```bash
-bundle exec boss write_baseline_osw "spec/files/v2.7.0/L100_Audit-1.0.0.xml" -o output/v2.7.0
+bundle exec boss write_baseline_osw "spec/files/v2.7.0/L100_Audit-1.0.0.xml" -o output/v2.7.0/L100_Audit-1.0.0
 ```
 
