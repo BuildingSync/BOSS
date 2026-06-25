@@ -131,9 +131,10 @@ class OSWArgPopulator
     osw[:steps].append({"measure_dir_name": "SetLightingLoadsByLPD", "arguments": {}})
     set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "SetLightingLoadsByLPD", key, value) }
 
-    # skip if no total_installed_power
+    # skip if no total_installed_power or no usable floor area
     total_installed_power = bsync_reader.get_total_installed_power
-    if total_installed_power.nil? or total_installed_power == 0
+    floor_area = bsync_reader.get_total_floor_area
+    if total_installed_power.nil? || total_installed_power == 0 || floor_area.nil? || floor_area <= 0
       set_measure_argument.call("__SKIP__", true)
       return
     end
@@ -143,7 +144,7 @@ class OSWArgPopulator
     set_measure_argument.call("__SKIP__", false)
     # space_type "entire building"
     # lpd
-    set_measure_argument.call("lpd", total_installed_power * 1000 / bsync_reader.get_total_floor_area)
+    set_measure_argument.call("lpd", total_installed_power * 1000.0 / floor_area)
     # add_instance_all_spaces
     # material_cost
     # demolition_cost
