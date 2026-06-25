@@ -73,11 +73,11 @@ module BOSS
       #  assert baseline exist
       if !File.file?(baseline_osw_path)
         error_message = (
-          "this function required #{baseline_owm_path}, which does not exist. "\
-          "Create #{baseline_owm_path} with `write_baseline_osw` and try again."
+          "this function requires #{baseline_osw_path}, which does not exist. "\
+          "Create #{baseline_osw_path} with `write_baseline_osw` and try again."
         )
-        OpenStudio.logFree(OpenStudio::Error, "BuildingSync.WorkflowMaker.assert_baseline_osw_exists", error_message)
-        raise StandardError, "BuildingSync.WorkflowMaker.assert_baseline_osw_exists: #{error_message}"
+        OpenStudio.logFree(OpenStudio::Error, 'BOSS.Boss.run_baseline_osw', error_message)
+        raise StandardError, "BOSS.Boss.run_baseline_osw: #{error_message}"
       end
 
       runner = OpenStudio::Extension::Runner.new(dirname = Dir.pwd, bundle_without = [], options = { run_simulations: true, verbose: false, num_parallel: 7, max_to_run: Float::INFINITY })
