@@ -99,9 +99,11 @@ module BOSS
       total_number_floors = _get_total_number_floors
 
       # get possible building_types based on occupancy_classification
-      building_types_by_occupancy_classification = eval(File.read(BUILDING_TYPES_BY_OCCUPANCY_CLASSIFICATION_PATH))
-      building_types = building_types_by_occupancy_classification[:"#{occupancy_classification}"]
-
+      building_types_by_occupancy_classification = JSON.parse(
+        File.read(BUILDING_TYPES_BY_OCCUPANCY_CLASSIFICATION_PATH),
+        symbolize_names: true
+      )
+      building_types = building_types_by_occupancy_classification[occupancy_classification.to_sym] || []
       # find the one thats the right size
       building_types.each do |building_type|
         next if total_floor_area < (building_type[:min_floor_area]&.to_f || 0) # too small!
