@@ -4,7 +4,7 @@
 # See also https://github.com/BuildingSync/BOSS/blob/develop/LICENSE.md
 # *******************************************************************************
 
-require 'pry'
+require 'json'
 require 'openstudio-standards'
 require_relative 'systems_map'
 require_relative 'bcl_weather_file_downloader'
