@@ -6,7 +6,7 @@
 
 require 'json'
 require 'rexml/document'
-
+require 'fileutils'
 require 'BOSS/buildingsync_reader/buildingsync_reader'
 require 'BOSS/osw_arg_populator'
 
