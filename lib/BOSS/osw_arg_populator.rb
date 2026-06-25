@@ -160,9 +160,10 @@ class OSWArgPopulator
     osw[:steps].append({"measure_dir_name": "set_electric_equipment_loads_by_epd", "arguments": {}})
     set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "set_electric_equipment_loads_by_epd", key, value) }
 
-    # skip if no total_weighted_average_load
+    # skip if no total_weighted_average_load or no usable floor area
     total_weighted_average_load = bsync_reader.get_total_weighted_average_load
-    if total_weighted_average_load.nil? or total_weighted_average_load == 0
+    floor_area = bsync_reader.get_total_floor_area
+    if total_weighted_average_load.nil? || total_weighted_average_load == 0 || floor_area.nil? || floor_area <= 0
       set_measure_argument.call("__SKIP__", true)
       return
     end
@@ -172,8 +173,7 @@ class OSWArgPopulator
     set_measure_argument.call("__SKIP__", false)
     # space_type "entire building"
     # epd
-    set_measure_argument.call("epd", total_weighted_average_load / bsync_reader.get_total_floor_area)
-    # add_instance_all_spaces
+    set_measure_argument.call("epd", total_weighted_average_load / floor_area)
     # material_cost
     # demolition_cost
     # years_until_costs_start
