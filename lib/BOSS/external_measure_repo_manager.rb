@@ -57,7 +57,12 @@ module BOSS
       repo_entries.each do |repo_entry|
         repo_root = repo_checkout_dir(repo_entry)
         if !Dir.exist?(repo_root)
-          OpenStudio.logFree(OpenStudio::Warn, 'BOSS.ExternalMeasureRepoManager.resolved_measure_directories', "Repository '#{repo_entry['name']}' is not installed at #{repo_root}. Run rake measures:install_external.")
+          message = "Repository '#{repo_entry['name']}' is not installed at #{repo_root}. Run rake measures:install_external."
+          if defined?(OpenStudio) && OpenStudio.respond_to?(:logFree)
+            OpenStudio.logFree(OpenStudio::Warn, 'BOSS.ExternalMeasureRepoManager.resolved_measure_directories', message)
+          else
+            warn("BOSS.ExternalMeasureRepoManager.resolved_measure_directories: #{message}")
+          end
           next
         end
 
