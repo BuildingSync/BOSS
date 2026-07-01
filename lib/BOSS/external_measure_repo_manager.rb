@@ -116,10 +116,14 @@ module BOSS
         raise StandardError, "Repo entry is missing required keys #{missing.join(', ')} in #{@manifest_path}"
       end
 
+      # Prevent path traversal / unexpected nesting in checkout dir.
+      if !repo['name'].to_s.match?(/\A[\w.-]+\z/)
+        raise StandardError, "Repo name '#{repo['name']}' must match /\\A[\\w.-]+\\z/ in #{@manifest_path}"
+      end
+
       if !repo['measure_roots'].is_a?(Array) || repo['measure_roots'].empty?
         raise StandardError, "Repo '#{repo['name']}' must define a non-empty measure_roots array"
       end
-
       repo
     end
 
