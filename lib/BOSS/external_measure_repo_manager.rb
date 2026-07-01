@@ -71,7 +71,12 @@ module BOSS
           if Dir.exist?(root_abs_path)
             directories << root_abs_path
           else
-            OpenStudio.logFree(OpenStudio::Warn, 'BOSS.ExternalMeasureRepoManager.resolved_measure_directories', "Configured measure root '#{root_rel_path}' does not exist for repository '#{repo_entry['name']}' (#{root_abs_path}).")
+            message = "Configured measure root '#{root_rel_path}' does not exist for repository '#{repo_entry['name']}' (#{root_abs_path})."
+            if defined?(OpenStudio) && OpenStudio.respond_to?(:logFree)
+              OpenStudio.logFree(OpenStudio::Warn, 'BOSS.ExternalMeasureRepoManager.resolved_measure_directories', message)
+            else
+              warn("BOSS.ExternalMeasureRepoManager.resolved_measure_directories: #{message}")
+            end
           end
         end
       end
