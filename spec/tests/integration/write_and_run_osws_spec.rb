@@ -48,11 +48,9 @@ RSpec.describe 'BOSS' do
         output_path = File.join(SPEC_OUTPUT_DIR, schema_version, "write_and_run_baseline_osw" , "#{File.basename(xml_path, File.extname(xml_path))}")
         puts output_path
 
-        boss = BOSS::Boss.new(xml_path, output_path, epw_path, standard)
-
         # Action
-        boss.write_baseline_osw
-        boss.run_baseline_osw
+        BOSS::Boss.write_baseline_osw(xml_path, output_path, epw_path, standard)
+        BOSS::Boss.run_baseline_osw(output_path)
 
         # Assertion
         puts output_path

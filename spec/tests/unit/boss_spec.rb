@@ -38,10 +38,9 @@ RSpec.describe BOSS::Boss do
     ].each { |m| allow(OSWArgPopulator).to receive(m) }
   end
 
-  describe '#write_baseline_osw measure_paths ordering' do
+  describe '.write_baseline_osw measure_paths ordering' do
     it 'places local measures first, then gem-provided measures, then external repo measures' do
       Dir.mktmpdir do |output_dir|
-        boss = described_class.new(xml_path, output_dir, nil, ASHRAE90_1)
 
         # Simulate OpenStudio::Extension.configure_osw adding gem-provided paths.
         allow(OpenStudio::Extension).to receive(:configure_osw) do |osw|
@@ -54,7 +53,7 @@ RSpec.describe BOSS::Boss do
         allow(fake_manager).to receive(:local_measure_directories).and_return([LOCAL_MEASURES_DIR])
         allow(fake_manager).to receive(:resolved_measure_directories).and_return([external_measure_dir])
 
-        osw_path = boss.write_baseline_osw
+        osw_path = described_class.write_baseline_osw(xml_path, output_dir, nil, ASHRAE90_1)
 
         osw = JSON.parse(File.read(osw_path), symbolize_names: true)
         measure_paths = osw[:measure_paths]
@@ -74,7 +73,6 @@ RSpec.describe BOSS::Boss do
 
     it 'omits external repo dir when no external repos are configured' do
       Dir.mktmpdir do |output_dir|
-        boss = described_class.new(xml_path, output_dir, nil, ASHRAE90_1)
 
         allow(OpenStudio::Extension).to receive(:configure_osw) do |osw|
           osw[:measure_paths] = [gem_measure_dir]
@@ -85,7 +83,7 @@ RSpec.describe BOSS::Boss do
         allow(fake_manager).to receive(:local_measure_directories).and_return([LOCAL_MEASURES_DIR])
         allow(fake_manager).to receive(:resolved_measure_directories).and_return([])
 
-        osw_path = boss.write_baseline_osw
+        osw_path = described_class.write_baseline_osw(xml_path, output_dir, nil, ASHRAE90_1)
 
         measure_paths = JSON.parse(File.read(osw_path), symbolize_names: true)[:measure_paths]
         expect(measure_paths).to include(LOCAL_MEASURES_DIR)
@@ -96,7 +94,6 @@ RSpec.describe BOSS::Boss do
 
     it 'does not duplicate paths that appear in both gem output and local dirs' do
       Dir.mktmpdir do |output_dir|
-        boss = described_class.new(xml_path, output_dir, nil, ASHRAE90_1)
 
         # Extension reports the local dir again (can happen with some gem setups).
         allow(OpenStudio::Extension).to receive(:configure_osw) do |osw|
@@ -108,7 +105,7 @@ RSpec.describe BOSS::Boss do
         allow(fake_manager).to receive(:local_measure_directories).and_return([LOCAL_MEASURES_DIR])
         allow(fake_manager).to receive(:resolved_measure_directories).and_return([external_measure_dir])
 
-        osw_path = boss.write_baseline_osw
+        osw_path = described_class.write_baseline_osw(xml_path, output_dir, nil, ASHRAE90_1)
 
         measure_paths = JSON.parse(File.read(osw_path), symbolize_names: true)[:measure_paths]
         expect(measure_paths.count(LOCAL_MEASURES_DIR)).to eq 1
