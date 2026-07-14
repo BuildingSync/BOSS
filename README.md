@@ -49,7 +49,7 @@ The table below maps in detail the BuildingSync XML data to measure inputs. Note
 - read `.../Site` as `/BuildingSync/Facilities/Facility/Sites/Site`
 - read `.../Building` as `/BuildingSync/Facilities/Facility/Sites/Site/Buildings/Building`
 
-| Measure                                | Argument                | set by function in BuildingSyncReader                            | Read from buidingsync                                                                                                             |
+| Measure                                | Argument                | set by function in BuildingSyncReader                            | Read from BuildingSync                                                                                                             |
 |----------------------------------------|-------------------------|-------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
 | [set_run_period]                       |                         |                                           |                                                                                                                                   |
 |                                        | timesteps_per_hour      |                                           | Hard Coded to `4`                                                                                                                 |
