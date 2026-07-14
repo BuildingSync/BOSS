@@ -160,7 +160,6 @@ Use this when `output/v2.7.0/L100_Audit-1.0.0/baseline/in.osw` already exists:
 
 ```bash
 bundle exec boss run_osw \
-    "spec/files/v2.7.0/L100_Audit-1.0.0.xml" \
     -o output/v2.7.0/L100_Audit-1.0.0
 ```
 
