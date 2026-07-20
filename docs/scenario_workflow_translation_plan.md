@@ -111,6 +111,28 @@ Initial mappings may use the legacy BuildingSync-gem `workflow_maker.json` as ba
 
 Conditional arguments should be data-driven. The first supported conditions should come from reader-derived context such as standards building type and principal HVAC/system type. Avoid per-measure Ruby `if`/`elsif` chains.
 
+## Using the Legacy BuildingSync-gem Work
+
+The legacy `../BuildingSync-gem` repository is an important reference, but it should not become a runtime dependency of BOSS. Use it to understand proven workflow concepts, then re-implement the needed behavior in BOSS using current dependencies and BuildingSync v2.7 fixtures.
+
+Legacy references to inspect:
+
+- `../BuildingSync-gem/lib/buildingsync/report.rb` — how reports group current-building, measured, and package-of-measures scenarios.
+- `../BuildingSync-gem/lib/buildingsync/scenario.rb` — how a scenario exposes `MeasureID` references, owns an OSW, and later gathers results.
+- `../BuildingSync-gem/lib/buildingsync/model_articulation/measure.rb` — simple measure wrapper concept.
+- `../BuildingSync-gem/lib/buildingsync/makers/workflow_maker.rb` — scenario workflow sequence: deep-copy workflow, resolve package measures, configure steps, write OSWs, run OSWs.
+- `../BuildingSync-gem/lib/buildingsync/makers/workflow_maker.json` — seed ideas for category/name to OpenStudio measure mappings.
+
+How to leverage it by PR:
+
+- PRs 2-4 may borrow the report/scenario/measure concepts, but should keep parsing in `BOSS::BuildingSyncReader` and keep namespace handling compatible with current BOSS fixtures.
+- PRs 5-9 may use `workflow_maker.json` as a mapping seed, but every measure directory and argument must be verified against the OpenStudio gem versions declared in `BOSS.gemspec` before it is added to BOSS.
+- PRs 8-9 may borrow the idea of conditional arguments, but should express conditions through mapping data and context values rather than a per-measure Ruby `if`/`elsif` chain.
+- PRs 11-14 may borrow the deep-copy/write/run workflow shape, but should preserve BOSS's current baseline OSW generation and output layout.
+- Result writeback ideas from the legacy gem are intentionally future work; do not include them in this first release unless this plan is explicitly updated.
+
+Do not copy blindly from the legacy gem. It targets older BuildingSync schema versions and older OpenStudio gems, so stale measure names, arguments, assumptions, and failure checks are expected. Any BOSS mapping or workflow behavior inspired by the legacy gem needs a current fixture test or a clear manual verification note.
+
 ## Warning Policy
 
 The implementation should return structured warnings and log them consistently. These conditions are warnings, not fatal translation errors:
@@ -128,26 +150,48 @@ If a scenario has at least one mapped measure, write its OSW and include warning
 
 Each PR should be independently reviewable and should not implement later PR scope early unless it is necessary to keep the current PR coherent.
 
-| PR | Title | Scope | Depends On | Green Light | Red Light |
-| --- | --- | --- | --- | --- | --- |
-| 1 | Guiding plan doc | Add this repository plan document. | None | The doc directs PRs 2-18, names acceptance gates, and keeps first-release scope clear. | The doc leaves scenario selection, mapping ownership, warning behavior, or result writeback scope ambiguous. |
-| 2 | Scenario data model and discovery | Add reader-returned structures for first-facility report-level package scenarios. Extract scenario ID, name, temporal status, report ID, package ID, reference case ID, measure IDrefs, and linked premises. | PR 1 | Unit tests prove `building_151.xml` discovers baseline plus all package scenarios and existing reader behavior remains unchanged. | Parser assumes a hardcoded namespace, reads the wrong scenario path, or breaks existing reader tests. |
-| 3 | Facility measure index | Index facility measures by ID and extract category/name metadata plus linked premises, cost/savings fields, and implementation status. | PR 2 | Tests resolve package `MeasureID` references in `building_151.xml` to parsed measure metadata. | Unresolved refs are silently dropped or measures without `TechnologyCategories` crash parsing. |
-| 4 | Parser warning contract | Add structured warnings for missing IDs, unresolved refs, empty packages, missing names, missing categories, and packages with no usable measures. | PR 3 | Tests cover warning cases using `BuildingEQ-1.0.0.xml`, `Golden Test File.xml`, and no-measure fixtures. | Warnings only print to stdout or malformed package data aborts all discovery. |
-| 5 | Initial mapping JSON | Add `lib/BOSS/scenario_measure_map.json` with verified mappings for an initial supported set from `building_151.xml`. | PR 1 | Mapping JSON is valid, and every included entry has source category/name, target `measure_dir_name`, and arguments. | Legacy mappings are copied blindly without checking current OpenStudio measure dirs/args. |
-| 6 | Basic `ScenarioMeasureMapper` | Load JSON, normalize lookup keys, and map one parsed BuildingSync measure to OpenStudio step specs using `SystemCategoryAffected` plus `MeasureName`. | PRs 3, 5 | Mapper unit tests return expected steps and structured unmapped warnings. | Mapper mutates reader data, raises on unmapped measures, or hardcodes rules outside JSON. |
-| 7 | Technology category fallback | Add fallback lookup by technology category plus `MeasureName`. | PR 6 | Tests show fallback mapping works when `SystemCategoryAffected` is absent, while normal lookup priority is preserved. | Fallback changes normal category/name lookup behavior. |
-| 8 | Conditional mapping rules | Add data-driven conditional argument support for building type and principal HVAC/system context. | PR 6 | Tests prove conditions include and exclude arguments predictably. | Implementation becomes a per-measure Ruby condition chain. |
-| 9 | Structured mapping results | Return mapped steps, skipped measure IDs, warnings, and scenario-level write/skip status. | PRs 6-8 | Scenarios with mapped measures are writable; zero-mapped scenarios are skipped with clear warnings. | Callers must infer status from logs or empty arrays. |
-| 10 | Baseline OSW builder refactor | Refactor baseline writing into an internal baseline OSW builder while preserving public behavior. | PR 1 | Existing baseline integration tests pass and generated baseline OSW steps are unchanged. | Existing API, CLI, or baseline output changes unexpectedly. |
-| 11 | Scenario OSW writer API | Add an API that writes baseline plus scenario OSWs for package scenarios with at least one mapped measure. | PRs 9, 10 | Generation tests show expected directories and skipped-scenario reporting. | API writes OSWs for zero-mapped scenarios or disturbs baseline output. |
-| 12 | Scenario workflow step assembly | Deep-copy baseline OSW and append mapped retrofit steps in deterministic order. | PR 11 | OSW tests assert baseline steps plus expected mapped measure steps and arguments. | Scenario workflows omit baseline creation steps, mutate baseline OSW, or use nondeterministic step order. |
-| 13 | Generic OSW step helpers | Centralize mapped step appending and `OpenStudio::Extension.set_measure_argument` use. | PR 12 | Tests prove boolean, numeric, and string arguments serialize correctly. | Baseline populator methods are broadly rewritten or baseline JSON changes unintentionally. |
-| 14 | Generalized runner | Run `baseline/in.osw` and `scenarios/**/in.osw`; keep `run_baseline_osw` intact. | PR 11 | Tests or smoke run show the correct OSW list and baseline-only compatibility. | Runner includes skipped or missing OSWs, or removes baseline-only behavior. |
-| 15 | CLI command | Add a Thor command for baseline plus all package scenarios using existing output, weather, standard, and run options. | PRs 11, 14 | CLI help documents the command, write-only mode produces OSWs, and run mode invokes the generalized runner. | Existing `write_baseline_osw` or `run_osw` behavior changes unexpectedly. |
-| 16 | User documentation | Update README or user docs with scenario path, output layout, mapping policy, warning behavior, and CLI examples. | PR 15 | Docs match implemented command names/options and include one known fixture example. | Docs promise result writeback or unsupported mapping coverage. |
-| 17 | Mapper unit test expansion | Add focused tests for mapped, conditional, fallback, and unmapped cases. | PRs 5-9 | Mapper behavior is covered without relying only on slow integration tests. | Important mapper paths only have integration coverage. |
-| 18 | Scenario generation and integration coverage | Add OSW generation tests and focused write/run integration for a small known-translatable scenario subset. | PRs 11-15, 17 | Focused commands pass; supported scenario `out.osw` files show `completed_status: Success`. | Tests run every package scenario by default, are too slow for CI, or hide failures behind broad skips. |
+| PR | Status | Delivered By | Title | Scope | Depends On | Green Light | Red Light |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | In Progress | Current docs PR | Guiding plan doc | Add this repository plan document. | None | The doc directs PRs 2-18, names acceptance gates, and keeps first-release scope clear. | The doc leaves scenario selection, mapping ownership, warning behavior, or result writeback scope ambiguous. |
+| 2 | Planned | - | Scenario data model and discovery | Add reader-returned structures for first-facility report-level package scenarios. Extract scenario ID, name, temporal status, report ID, package ID, reference case ID, measure IDrefs, and linked premises. | PR 1 | Unit tests prove `building_151.xml` discovers baseline plus all package scenarios and existing reader behavior remains unchanged. | Parser assumes a hardcoded namespace, reads the wrong scenario path, or breaks existing reader tests. |
+| 3 | Planned | - | Facility measure index | Index facility measures by ID and extract category/name metadata plus linked premises, cost/savings fields, and implementation status. | PR 2 | Tests resolve package `MeasureID` references in `building_151.xml` to parsed measure metadata. | Unresolved refs are silently dropped or measures without `TechnologyCategories` crash parsing. |
+| 4 | Planned | - | Parser warning contract | Add structured warnings for missing IDs, unresolved refs, empty packages, missing names, missing categories, and packages with no usable measures. | PR 3 | Tests cover warning cases using `BuildingEQ-1.0.0.xml`, `Golden Test File.xml`, and no-measure fixtures. | Warnings only print to stdout or malformed package data aborts all discovery. |
+| 5 | Planned | - | Initial mapping JSON | Add `lib/BOSS/scenario_measure_map.json` with verified mappings for an initial supported set from `building_151.xml`. | PR 1 | Mapping JSON is valid, and every included entry has source category/name, target `measure_dir_name`, and arguments. | Legacy mappings are copied blindly without checking current OpenStudio measure dirs/args. |
+| 6 | Planned | - | Basic `ScenarioMeasureMapper` | Load JSON, normalize lookup keys, and map one parsed BuildingSync measure to OpenStudio step specs using `SystemCategoryAffected` plus `MeasureName`. | PRs 3, 5 | Mapper unit tests return expected steps and structured unmapped warnings. | Mapper mutates reader data, raises on unmapped measures, or hardcodes rules outside JSON. |
+| 7 | Planned | - | Technology category fallback | Add fallback lookup by technology category plus `MeasureName`. | PR 6 | Tests show fallback mapping works when `SystemCategoryAffected` is absent, while normal lookup priority is preserved. | Fallback changes normal category/name lookup behavior. |
+| 8 | Planned | - | Conditional mapping rules | Add data-driven conditional argument support for building type and principal HVAC/system context. | PR 6 | Tests prove conditions include and exclude arguments predictably. | Implementation becomes a per-measure Ruby condition chain. |
+| 9 | Planned | - | Structured mapping results | Return mapped steps, skipped measure IDs, warnings, and scenario-level write/skip status. | PRs 6-8 | Scenarios with mapped measures are writable; zero-mapped scenarios are skipped with clear warnings. | Callers must infer status from logs or empty arrays. |
+| 10 | Planned | - | Baseline OSW builder refactor | Refactor baseline writing into an internal baseline OSW builder while preserving public behavior. | PR 1 | Existing baseline integration tests pass and generated baseline OSW steps are unchanged. | Existing API, CLI, or baseline output changes unexpectedly. |
+| 11 | Planned | - | Scenario OSW writer API | Add an API that writes baseline plus scenario OSWs for package scenarios with at least one mapped measure. | PRs 9, 10 | Generation tests show expected directories and skipped-scenario reporting. | API writes OSWs for zero-mapped scenarios or disturbs baseline output. |
+| 12 | Planned | - | Scenario workflow step assembly | Deep-copy baseline OSW and append mapped retrofit steps in deterministic order. | PR 11 | OSW tests assert baseline steps plus expected mapped measure steps and arguments. | Scenario workflows omit baseline creation steps, mutate baseline OSW, or use nondeterministic step order. |
+| 13 | Planned | - | Generic OSW step helpers | Centralize mapped step appending and `OpenStudio::Extension.set_measure_argument` use. | PR 12 | Tests prove boolean, numeric, and string arguments serialize correctly. | Baseline populator methods are broadly rewritten or baseline JSON changes unintentionally. |
+| 14 | Planned | - | Generalized runner | Run `baseline/in.osw` and `scenarios/**/in.osw`; keep `run_baseline_osw` intact. | PR 11 | Tests or smoke run show the correct OSW list and baseline-only compatibility. | Runner includes skipped or missing OSWs, or removes baseline-only behavior. |
+| 15 | Planned | - | CLI command | Add a Thor command for baseline plus all package scenarios using existing output, weather, standard, and run options. | PRs 11, 14 | CLI help documents the command, write-only mode produces OSWs, and run mode invokes the generalized runner. | Existing `write_baseline_osw` or `run_osw` behavior changes unexpectedly. |
+| 16 | Planned | - | User documentation | Update README or user docs with scenario path, output layout, mapping policy, warning behavior, and CLI examples. | PR 15 | Docs match implemented command names/options and include one known fixture example. | Docs promise result writeback or unsupported mapping coverage. |
+| 17 | Planned | - | Mapper unit test expansion | Add focused tests for mapped, conditional, fallback, and unmapped cases. | PRs 5-9 | Mapper behavior is covered without relying only on slow integration tests. | Important mapper paths only have integration coverage. |
+| 18 | Planned | - | Scenario generation and integration coverage | Add OSW generation tests and focused write/run integration for a small known-translatable scenario subset. | PRs 11-15, 17 | Focused commands pass; supported scenario `out.osw` files show `completed_status: Success`. | Tests run every package scenario by default, are too slow for CI, or hide failures behind broad skips. |
+
+## Progress Tracking Protocol
+
+The PR sequence table is the tracker. Keep it current so future sessions can trust it without reconstructing history from memory.
+
+Allowed status values:
+
+- `Planned` — not started.
+- `In Progress` — actively being implemented on a branch.
+- `Done` — merged or otherwise delivered; green-light criteria satisfied.
+- `Blocked` — cannot proceed without a decision, dependency, or external fix.
+- `Closed` — intentionally no longer needed; keep the reason in the row or nearby note.
+
+When a PR step is completed or merged:
+
+1. Change its `Status` in the table.
+2. Fill `Delivered By` with the PR number, commit SHA, or short note that identifies what delivered it.
+3. Confirm the row's green-light criteria were met.
+4. If scope or order changed, update the affected rows and explain the change in this document.
+5. Leave future `Planned` rows in place so later sessions can find the next unfinished step.
+
+When starting a future session, check this table first, then verify against `git log` and the current file tree. If the table is stale, update it before doing implementation work.
 
 ## Verification Commands
 
