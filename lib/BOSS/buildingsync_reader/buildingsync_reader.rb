@@ -28,6 +28,21 @@ module BOSS
 
     end
 
+    def get_report_scenarios
+      scenarios = []
+      @facility_xml&.elements&.each("#{@ns}Reports/#{@ns}Report") do |report_xml|
+        report_xml.elements.each("#{@ns}Scenarios/#{@ns}Scenario") do |scenario_xml|
+          scenarios << _scenario_hash(report_xml, scenario_xml)
+        end
+      end
+
+      return scenarios
+    end
+
+    def get_package_measure_scenarios
+      return get_report_scenarios.select { |scenario| scenario[:scenario_type] == :package_of_measures }
+    end
+
     # tries to get weather file from:
     #  1. given weather file
     #  2. city state from either building or site
@@ -309,6 +324,70 @@ module BOSS
       return nil if all_weighted_average_loads.length == 0
       return nil if !all_weighted_average_loads.all?
       return all_weighted_average_loads.map {|s| s.to_f}.sum
+    end
+
+    private
+
+    def _scenario_hash(report_xml, scenario_xml)
+      package_xml = _package_of_measures_xml(scenario_xml)
+
+      return {
+        scenario_id: scenario_xml.attributes['ID'],
+        scenario_name: _element_text(scenario_xml, "#{@ns}ScenarioName"),
+        temporal_status: _element_text(scenario_xml, "#{@ns}TemporalStatus"),
+        report_id: report_xml.attributes['ID'],
+        scenario_type: _scenario_type(scenario_xml, package_xml),
+        package_id: package_xml&.attributes&.[]('ID'),
+        reference_case_id: package_xml&.elements&.[]("#{@ns}ReferenceCase")&.attributes&.[]('IDref'),
+        measure_ids: _measure_idrefs(package_xml),
+        linked_premises_idrefs: _linked_premises_idrefs(scenario_xml)
+      }
+    end
+
+    def _scenario_type(scenario_xml, package_xml)
+      return :package_of_measures if !package_xml.nil?
+
+      current_building_xml = scenario_xml.elements["#{@ns}ScenarioType/#{@ns}CurrentBuilding"]
+      return :current_building if !current_building_xml.nil?
+
+      return :other
+    end
+
+    def _package_of_measures_xml(scenario_xml)
+      return scenario_xml.elements["#{@ns}ScenarioType/#{@ns}PackageOfMeasures"]
+    end
+
+    def _element_text(xml, path)
+      return xml.elements[path]&.text
+    end
+
+    def _measure_idrefs(package_xml)
+      return [] if package_xml.nil?
+
+      measure_ids = []
+      package_xml.elements.each("#{@ns}MeasureIDs/#{@ns}MeasureID") do |measure_id_xml|
+        measure_id = measure_id_xml.attributes['IDref']
+        measure_ids << measure_id if !measure_id.nil?
+      end
+      return measure_ids
+    end
+
+    def _linked_premises_idrefs(scenario_xml)
+      linked_premises_xml = scenario_xml.elements["#{@ns}LinkedPremises"]
+      return [] if linked_premises_xml.nil?
+
+      return _descendant_idrefs(linked_premises_xml)
+    end
+
+    def _descendant_idrefs(xml)
+      idrefs = []
+      xml.each_element do |child_xml|
+        idref = child_xml.attributes['IDref']
+        idrefs << idref if !idref.nil?
+        idrefs.concat(_descendant_idrefs(child_xml))
+      end
+
+      return idrefs
     end
   end
 end

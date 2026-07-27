@@ -7,6 +7,13 @@
 require 'tempfile'
 require 'BOSS/buildingsync_reader/buildingsync_reader'
 
+UNIT_SPEC_FILES_DIR = File.expand_path('../../files', __dir__)
+
+def load_fixture_doc(schema_version, file_name)
+  xml_path = File.join(UNIT_SPEC_FILES_DIR, schema_version, file_name)
+  REXML::Document.new(File.read(xml_path), ignore_whitespace_nodes: :all)
+end
+
 def wrap_in_site(xml)
   <<~XML
     <BuildingSync>
@@ -23,7 +30,163 @@ def wrap_in_site(xml)
   XML
 end
 
+def wrap_in_facility(xml)
+  <<~XML
+    <BuildingSync>
+      <Facilities>
+        <Facility>
+          <Sites>
+            <Site>
+              <Buildings>
+                <Building>
+                </Building>
+              </Buildings>
+            </Site>
+          </Sites>
+          #{xml}
+        </Facility>
+      </Facilities>
+    </BuildingSync>
+  XML
+end
+
 RSpec.describe 'BuildingSyncReader' do
+  describe 'get_report_scenarios should' do
+    it 'discover baseline and package scenarios from building_151' do
+      # Set Up
+      doc = load_fixture_doc('v2.7.0', 'building_151.xml')
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      scenarios = buidingsync_reader.get_report_scenarios
+      package_scenarios = buidingsync_reader.get_package_measure_scenarios
+
+      # Assert
+      expected_package_ids = [
+        'Scenario1',
+        'Scenario3',
+        'Scenario4',
+        'Scenario5',
+        'Scenario6',
+        'Scenario7',
+        'Scenario8',
+        'Scenario9',
+        'Scenario10',
+        'Scenario11',
+        'Scenario12',
+        'Scenario14',
+        'Scenario16',
+        'Scenario18',
+        'Scenario24',
+        'Scenario25'
+      ]
+
+      expect(scenarios.length).to eq 17
+      expect(package_scenarios.map { |scenario| scenario[:scenario_id] }).to eq expected_package_ids
+      expect(scenarios.count { |scenario| scenario[:scenario_type] == :current_building }).to eq 1
+      expect(scenarios.count { |scenario| scenario[:scenario_type] == :package_of_measures }).to eq 16
+    end
+
+    it 'extract scenario fields from package and current-building scenarios' do
+      # Set Up
+      doc = load_fixture_doc('v2.7.0', 'building_151.xml')
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      scenarios = buidingsync_reader.get_report_scenarios
+      baseline = scenarios.find { |scenario| scenario[:scenario_id] == 'Baseline' }
+      scenario1 = scenarios.find { |scenario| scenario[:scenario_id] == 'Scenario1' }
+
+      # Assert
+      expect(baseline).to include(
+        scenario_id: 'Baseline',
+        scenario_name: 'Baseline',
+        scenario_type: :current_building,
+        report_id: 'Report1',
+        temporal_status: nil,
+        package_id: nil,
+        reference_case_id: nil,
+        measure_ids: [],
+        linked_premises_idrefs: []
+      )
+
+      expect(scenario1).to include(
+        scenario_id: 'Scenario1',
+        scenario_name: 'LED Only',
+        scenario_type: :package_of_measures,
+        report_id: 'Report1',
+        temporal_status: nil,
+        package_id: 'PackageOfMeasures1',
+        reference_case_id: 'Baseline',
+        measure_ids: ['Measure1'],
+        linked_premises_idrefs: ['Building151']
+      )
+    end
+
+    it 'extract temporal status and multiple measure IDrefs' do
+      # Set Up
+      doc = REXML::Document.new wrap_in_facility(<<~XML)
+        <Reports>
+          <Report ID="ReportA">
+            <Scenarios>
+              <Scenario ID="ScenarioA">
+                <ScenarioName>Package A</ScenarioName>
+                <TemporalStatus>Post retrofit</TemporalStatus>
+                <ScenarioType>
+                  <PackageOfMeasures ID="PackageA">
+                    <ReferenceCase IDref="BaselineA"/>
+                    <MeasureIDs>
+                      <MeasureID IDref="MeasureA"/>
+                      <MeasureID IDref="MeasureB"/>
+                    </MeasureIDs>
+                  </PackageOfMeasures>
+                </ScenarioType>
+              </Scenario>
+            </Scenarios>
+          </Report>
+        </Reports>
+      XML
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      scenarios = buidingsync_reader.get_package_measure_scenarios
+
+      # Assert
+      expect(scenarios.first).to include(
+        scenario_id: 'ScenarioA',
+        temporal_status: 'Post retrofit',
+        package_id: 'PackageA',
+        reference_case_id: 'BaselineA',
+        measure_ids: ['MeasureA', 'MeasureB']
+      )
+    end
+
+    it 'uses the document namespace prefix when discovering scenarios' do
+      # Set Up
+      doc = load_fixture_doc('v2.7.0', 'building_151_n1.xml')
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      scenarios = buidingsync_reader.get_report_scenarios
+
+      # Assert
+      expect(scenarios.find { |scenario| scenario[:scenario_id] == 'Baseline' }[:scenario_type]).to eq :current_building
+      expect(buidingsync_reader.get_package_measure_scenarios.map { |scenario| scenario[:package_id] }).to include('PackageOfMeasures1')
+    end
+
+    it 'returns empty arrays when no report scenarios exist' do
+      # Set Up
+      doc = REXML::Document.new wrap_in_facility('')
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_report_scenarios).to eq []
+      expect(buidingsync_reader.get_package_measure_scenarios).to eq []
+    end
+  end
+
   describe 'get_climate_zone should' do
     it "get from site" do
       # Set Up
