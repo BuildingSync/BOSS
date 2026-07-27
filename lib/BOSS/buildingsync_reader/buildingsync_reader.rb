@@ -310,5 +310,52 @@ module BOSS
       return nil if !all_weighted_average_loads.all?
       return all_weighted_average_loads.map {|s| s.to_f}.sum
     end
+
+    # first valid window that has all mappable fields
+    def get_window_data
+      # if no windows, return nil
+      fenestration_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}FenestrationSystems/#{@ns}FenestrationSystem") {|s| s}
+      return nil if fenestration_systems.nil?
+
+      # get all windows
+      windows = fenestration_systems.select {|fs| fs.elements["#{@ns}FenestrationType/#{@ns}Window"] }
+      return nil if windows.empty?
+
+      # iter through windows until we get one with all the required fields
+      windows.each do |window|
+        # get data
+        fenestration_frame_material = window.elements["#{@ns}FenestrationFrameMaterial"]&.text
+        glass_type = window.elements["#{@ns}GlassType"]&.text
+        fenestration_glass_layers = window.elements["#{@ns}FenestrationGlassLayers"]&.text
+        solar_heat_gain_coefficient = window.elements["#{@ns}SolarHeatGainCoefficient"]&.text
+        visible_transmittance = window.elements["#{@ns}VisibleTransmittance"]&.text
+
+        # We only need one of fenestration_u_factor/fenestration_r_value
+        fenestration_u_factor = window.elements["#{@ns}FenestrationUFactor"]&.text
+        if fenestration_u_factor.nil?
+          fenestration_r_value = window.elements["#{@ns}FenestrationRValue"]&.text
+          if !fenestration_r_value.nil? then fenestration_u_factor = 1 / fenestration_r_value end
+        end
+
+        # map data
+        os_fenestration_frame_material = BuildingSyncToOSSystemMaps.get_frame_material_map[fenestration_frame_material.to_s]
+        os_glass_type = BuildingSyncToOSSystemMaps.get_glass_type_map[glass_type.to_s]
+        os_fenestration_glass_layers = BuildingSyncToOSSystemMaps.get_glass_layers_map[fenestration_glass_layers.to_s]
+
+        # return if we can use this one
+        if (
+          !os_fenestration_frame_material.nil? &&
+          !os_glass_type.nil? &&
+          !os_fenestration_glass_layers.nil? &&
+          !fenestration_u_factor.nil? &&
+          !solar_heat_gain_coefficient.nil? &&
+          !visible_transmittance.nil?
+        )
+          window_pane_type = [os_fenestration_glass_layers, os_glass_type, os_fenestration_frame_material].join(' - ')
+          return window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance
+        end
+      end
+        return nil
+    end
   end
 end
