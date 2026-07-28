@@ -43,6 +43,16 @@ module BOSS
       return get_report_scenarios.select { |scenario| scenario[:scenario_type] == :package_of_measures }
     end
 
+    def get_measures
+      measures = {}
+      _measure_xmls.each do |measure_xml|
+        measure = _measure_hash(measure_xml)
+        measures[measure[:measure_id]] = measure if !measure[:measure_id].nil?
+      end
+
+      return measures
+    end
+
     # tries to get weather file from:
     #  1. given weather file
     #  2. city state from either building or site
@@ -328,6 +338,62 @@ module BOSS
 
     private
 
+    def _measure_xmls
+      measure_xmls = []
+      @facility_xml&.elements&.each("#{@ns}Measures/#{@ns}Measure") do |measure_xml|
+        measure_xmls << measure_xml
+      end
+
+      return measure_xmls
+    end
+
+    def _measure_hash(measure_xml)
+      technology_category_xml = _technology_category_xml(measure_xml)
+
+      return {
+        measure_id: measure_xml.attributes['ID'],
+        system_category_affected: _element_text(measure_xml, "#{@ns}SystemCategoryAffected"),
+        technology_category_element_name: _technology_category_element_name(technology_category_xml),
+        measure_name: _technology_measure_name(technology_category_xml),
+        custom_measure_name: _element_text(measure_xml, "#{@ns}CustomMeasureName"),
+        linked_premises_idrefs: _linked_premises_idrefs(measure_xml),
+        mv_cost: _numeric_element_text(measure_xml, "#{@ns}MVCost"),
+        useful_life: _numeric_element_text(measure_xml, "#{@ns}UsefulLife"),
+        measure_total_first_cost: _numeric_element_text(measure_xml, "#{@ns}MeasureTotalFirstCost"),
+        measure_installation_cost: _numeric_element_text(measure_xml, "#{@ns}MeasureInstallationCost"),
+        measure_material_cost: _numeric_element_text(measure_xml, "#{@ns}MeasureMaterialCost"),
+        om_cost_annual_savings: _numeric_element_text(measure_xml, "#{@ns}MeasureSavingsAnalysis/#{@ns}OMCostAnnualSavings"),
+        implementation_status: _element_text(measure_xml, "#{@ns}ImplementationStatus")
+      }
+    end
+
+    def _technology_category_xml(measure_xml)
+      technology_category_xml = measure_xml.elements["#{@ns}TechnologyCategories/#{@ns}TechnologyCategory"]
+
+      return technology_category_xml&.elements&.[](1)
+    end
+
+    def _technology_category_element_name(technology_category_xml)
+      return nil if technology_category_xml.nil?
+
+      return technology_category_xml.name.to_s.split(':').last
+    end
+
+    def _technology_measure_name(technology_category_xml)
+      return nil if technology_category_xml.nil?
+
+      return _element_text(technology_category_xml, "#{@ns}MeasureName")
+    end
+
+    def _numeric_element_text(xml, path)
+      value = _element_text(xml, path)
+      return nil if value.nil? || value.strip.empty?
+
+      return Float(value)
+    rescue ArgumentError
+      return nil
+    end
+
     def _scenario_hash(report_xml, scenario_xml)
       package_xml = _package_of_measures_xml(scenario_xml)
 
@@ -372,8 +438,8 @@ module BOSS
       return measure_ids
     end
 
-    def _linked_premises_idrefs(scenario_xml)
-      linked_premises_xml = scenario_xml.elements["#{@ns}LinkedPremises"]
+    def _linked_premises_idrefs(xml)
+      linked_premises_xml = xml.elements["#{@ns}LinkedPremises"]
       return [] if linked_premises_xml.nil?
 
       return _descendant_idrefs(linked_premises_xml)
