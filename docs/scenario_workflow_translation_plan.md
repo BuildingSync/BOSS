@@ -153,7 +153,7 @@ Each PR should be independently reviewable and should not implement later PR sco
 | PR | Status | Delivered By | Title | Scope | Depends On | Green Light | Red Light |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | In Progress | Current docs PR | Guiding plan doc | Add this repository plan document. | None | The doc directs PRs 2-18, names acceptance gates, and keeps first-release scope clear. | The doc leaves scenario selection, mapping ownership, warning behavior, or result writeback scope ambiguous. |
-| 2 | Planned | - | Scenario data model and discovery | Add reader-returned structures for first-facility report-level package scenarios. Extract scenario ID, name, temporal status, report ID, package ID, reference case ID, measure IDrefs, and linked premises. | PR 1 | Unit tests prove `building_151.xml` discovers baseline plus all package scenarios and existing reader behavior remains unchanged. | Parser assumes a hardcoded namespace, reads the wrong scenario path, or breaks existing reader tests. |
+| 2 | Done | Current PR-2 branch | Scenario data model and discovery | Add reader-returned structures for first-facility report-level package scenarios. Extract scenario ID, name, temporal status, report ID, package ID, reference case ID, measure IDrefs, and linked premises. | PR 1 | Unit tests prove `building_151.xml` discovers baseline plus all package scenarios and existing reader behavior remains unchanged. | Parser assumes a hardcoded namespace, reads the wrong scenario path, or breaks existing reader tests. |
 | 3 | Planned | - | Facility measure index | Index facility measures by ID and extract category/name metadata plus linked premises, cost/savings fields, and implementation status. | PR 2 | Tests resolve package `MeasureID` references in `building_151.xml` to parsed measure metadata. | Unresolved refs are silently dropped or measures without `TechnologyCategories` crash parsing. |
 | 4 | Planned | - | Parser warning contract | Add structured warnings for missing IDs, unresolved refs, empty packages, missing names, missing categories, and packages with no usable measures. | PR 3 | Tests cover warning cases using `BuildingEQ-1.0.0.xml`, `Golden Test File.xml`, and no-measure fixtures. | Warnings only print to stdout or malformed package data aborts all discovery. |
 | 5 | Planned | - | Initial mapping JSON | Add `lib/BOSS/scenario_measure_map.json` with verified mappings for an initial supported set from `building_151.xml`. | PR 1 | Mapping JSON is valid, and every included entry has source category/name, target `measure_dir_name`, and arguments. | Legacy mappings are copied blindly without checking current OpenStudio measure dirs/args. |
@@ -192,6 +192,41 @@ When a PR step is completed or merged:
 5. Leave future `Planned` rows in place so later sessions can find the next unfinished step.
 
 When starting a future session, check this table first, then verify against `git log` and the current file tree. If the table is stale, update it before doing implementation work.
+
+## PR Handoff Notes
+
+Use this section for short durable notes that help the next PR start without reconstructing context from chat history. Keep entries concise and tied to a PR number.
+
+Each completed or blocked implementation PR should add an entry with:
+
+- Scope delivered or intentionally deferred.
+- Reader, mapper, OSW, CLI, or warning contracts that later PRs can rely on.
+- Verification commands run and their result.
+- Known blockers, local-environment issues, or follow-up decisions.
+
+Suggested entry format:
+
+```md
+### PR <number>: <title>
+
+- Status: <Done | Blocked | In Progress>
+- Delivered by: <PR number, commit SHA, or branch note>
+- Handoff: <one or two bullets with stable contracts for later PRs>
+- Verification: `<command>` - <result>
+- Follow-up: <only items needed by later PRs>
+```
+
+Keep detailed rationale in the relevant PR description or code review thread. Keep this section focused on what future implementation work needs to know.
+
+### PR 2: Scenario data model and discovery
+
+- Status: Done
+- Delivered by: Current PR-2 branch
+- Handoff: `BOSS::BuildingSyncReader#get_report_scenarios` returns first-facility report scenarios as symbol-keyed hashes with `scenario_id`, `scenario_name`, `temporal_status`, `report_id`, `scenario_type`, `package_id`, `reference_case_id`, `measure_ids`, and `linked_premises_idrefs`.
+- Handoff: `BOSS::BuildingSyncReader#get_package_measure_scenarios` filters those records to package-of-measures scenarios. PR 3 should use `measure_ids` to resolve package references against facility measures; it should not expect warnings or parsed measure metadata yet.
+- Verification: `bundle exec rspec spec/tests/unit/buildingsync_reader_spec.rb` - 22 examples, 0 failures.
+- Verification: `bundle exec rspec spec/tests/integration/write_and_run_osws_spec.rb` - completed in 79 minutes 27 seconds with 19 examples and 1 failure. The failure is an unrelated Windows command quoting issue for `Golden Test File` output paths with spaces; 18 final baseline `out.osw` files had `completed_status: Success`.
+- Follow-up: PR 3 starts facility measure indexing and should keep warning contracts deferred to PR 4.
 
 ## Verification Commands
 
