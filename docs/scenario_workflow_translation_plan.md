@@ -156,7 +156,7 @@ Each PR should be independently reviewable and should not implement later PR sco
 | 2 | Done | Current PR-2 branch | Scenario data model and discovery | Add reader-returned structures for first-facility report-level package scenarios. Extract scenario ID, name, temporal status, report ID, package ID, reference case ID, measure IDrefs, and linked premises. | PR 1 | Unit tests prove `building_151.xml` discovers baseline plus all package scenarios and existing reader behavior remains unchanged. | Parser assumes a hardcoded namespace, reads the wrong scenario path, or breaks existing reader tests. |
 | 3 | Done | Current PR-3 branch | Measure index | Index first-facility measures by ID and extract category/name metadata plus linked premises, cost/savings fields, and implementation status. | PR 2 | Tests resolve package `MeasureID` references in `building_151.xml` to parsed measure metadata. | Unresolved refs are silently dropped or measures without `TechnologyCategories` crash parsing. |
 | 4 | Done | Current PR-4 branch | Parser warning contract | Add structured warnings for missing IDs, unresolved refs, empty packages, missing names, missing categories, and packages with no usable measures. | PR 3 | Tests cover warning cases using `BuildingEQ-1.0.0.xml`, `Golden Test File.xml`, and no-measure fixtures. | Warnings only print to stdout or malformed package data aborts all discovery. |
-| 5 | Planned | - | Initial mapping JSON | Add `lib/BOSS/scenario_measure_map.json` with verified mappings for an initial supported set from `building_151.xml`. | PR 1 | Mapping JSON is valid, and every included entry has source category/name, target `measure_dir_name`, and arguments. | Legacy mappings are copied blindly without checking current OpenStudio measure dirs/args. |
+| 5 | Done | Current PR-5 branch | Initial mapping JSON | Add `lib/BOSS/scenario_measure_map.json` with verified mappings for an initial supported set from `building_151.xml`. | PR 1 | Mapping JSON is valid, and every included entry has source category/name, target `measure_dir_name`, and arguments. | Legacy mappings are copied blindly without checking current OpenStudio measure dirs/args. |
 | 6 | Planned | - | Basic `ScenarioMeasureMapper` | Load JSON, normalize lookup keys, and map one parsed BuildingSync measure to OpenStudio step specs using `SystemCategoryAffected` plus `MeasureName`. | PRs 3, 5 | Mapper unit tests return expected steps and structured unmapped warnings. | Mapper mutates reader data, raises on unmapped measures, or hardcodes rules outside JSON. |
 | 7 | Planned | - | Technology category fallback | Add fallback lookup by technology category plus `MeasureName`. | PR 6 | Tests show fallback mapping works when `SystemCategoryAffected` is absent, while normal lookup priority is preserved. | Fallback changes normal category/name lookup behavior. |
 | 8 | Planned | - | Conditional mapping rules | Add data-driven conditional argument support for building type and principal HVAC/system context. | PR 6 | Tests prove conditions include and exclude arguments predictably. | Implementation becomes a per-measure Ruby condition chain. |
@@ -247,6 +247,18 @@ Keep detailed rationale in the relevant PR description or code review thread. Ke
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/buildingsync_reader_spec.rb` - 33 examples, 0 failures.
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rubocop lib/BOSS/buildingsync_reader/buildingsync_reader.rb spec/tests/unit/buildingsync_reader_spec.rb` - fails on existing reader/spec style debt and new-cop configuration warnings; after PR-4 cleanup, the focused run reports 132 existing offenses, 117 autocorrectable.
 - Follow-up: PR 5 can add mapping JSON without expecting parser warnings to identify unmapped OpenStudio measures; mapping-specific warnings remain PR 6/PR 9 scope.
+
+### PR 5: Initial mapping JSON
+
+- Status: Done
+- Delivered by: Current PR-5 branch
+- Handoff: `lib/BOSS/scenario_measure_map.json` defines the initial system-category-plus-measure-name mapping data for a verified `building_151.xml` subset. Entries use exact reader source strings, include technology category metadata, and emit OSW-shaped step specs with `measure_dir_name` and argument hashes.
+- Handoff: PR 5 intentionally defers mappings that need conditional/context support or more target research, including daylight controls, package unit replacement, burner replacement, and boiler replacement. PR 6 should load the JSON as data only; technology-category fallback, conditional rules, and structured scenario results remain PRs 7-9.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec ruby -rjson -e "JSON.parse(File.read('lib/BOSS/scenario_measure_map.json'))"` - passed.
+- Verification: Local Ruby check against installed bundled measure sources - every mapped `measure_dir_name` and non-skip argument was present.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_map_spec.rb` - 3 examples, 0 failures.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/buildingsync_reader_spec.rb --format progress` - exited 0; the terminal emitted no RSpec summary for this command.
+- Follow-up: PR 6 should add `BOSS::ScenarioMeasureMapper`, normalize lookup keys for `system_category_affected` plus `measure_name`, and return structured unmapped warnings without mutating reader data.
 
 ## Verification Commands
 
