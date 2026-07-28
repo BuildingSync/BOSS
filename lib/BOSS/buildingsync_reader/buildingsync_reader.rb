@@ -28,6 +28,48 @@ module BOSS
 
     end
 
+    def get_report_scenarios
+      scenarios = []
+      @facility_xml&.elements&.each("#{@ns}Reports/#{@ns}Report") do |report_xml|
+        report_xml.elements.each("#{@ns}Scenarios/#{@ns}Scenario") do |scenario_xml|
+          scenarios << _scenario_hash(report_xml, scenario_xml)
+        end
+      end
+
+      return scenarios
+    end
+
+    def get_package_measure_scenarios
+      return get_report_scenarios.select { |scenario| scenario[:scenario_type] == :package_of_measures }
+    end
+
+    def get_measures
+      measures = {}
+      _measure_xmls.each do |measure_xml|
+        measure = _measure_hash(measure_xml)
+        measures[measure[:measure_id]] = measure if !measure[:measure_id].nil?
+      end
+
+      return measures
+    end
+
+    def get_parser_warnings
+      warnings = []
+      measures = get_measures
+
+      _measure_xmls.each do |measure_xml|
+        measure = _measure_hash(measure_xml)
+        warnings << _parser_warning(:missing_measure_id, 'Measure is missing ID.') if _blank?(measure[:measure_id])
+      end
+
+      _package_measure_scenario_xmls.each do |report_xml, scenario_xml, package_xml|
+        scenario = _scenario_hash(report_xml, scenario_xml)
+        warnings.concat(_package_measure_scenario_warnings(scenario, package_xml, measures))
+      end
+
+      return warnings
+    end
+
     # tries to get weather file from:
     #  1. given weather file
     #  2. city state from either building or site
@@ -309,6 +351,236 @@ module BOSS
       return nil if all_weighted_average_loads.length == 0
       return nil if !all_weighted_average_loads.all?
       return all_weighted_average_loads.map {|s| s.to_f}.sum
+    end
+
+    private
+
+    def _measure_xmls
+      measure_xmls = []
+      @facility_xml&.elements&.each("#{@ns}Measures/#{@ns}Measure") do |measure_xml|
+        measure_xmls << measure_xml
+      end
+
+      return measure_xmls
+    end
+
+    def _package_measure_scenario_xmls
+      scenario_xmls = []
+      @facility_xml&.elements&.each("#{@ns}Reports/#{@ns}Report") do |report_xml|
+        report_xml.elements.each("#{@ns}Scenarios/#{@ns}Scenario") do |scenario_xml|
+          package_xml = _package_of_measures_xml(scenario_xml)
+          scenario_xmls << [report_xml, scenario_xml, package_xml] if !package_xml.nil?
+        end
+      end
+
+      return scenario_xmls
+    end
+
+    def _measure_hash(measure_xml)
+      technology_category_xml = _technology_category_xml(measure_xml)
+
+      return {
+        measure_id: measure_xml.attributes['ID'],
+        system_category_affected: _element_text(measure_xml, "#{@ns}SystemCategoryAffected"),
+        technology_category_element_name: _technology_category_element_name(technology_category_xml),
+        measure_name: _technology_measure_name(technology_category_xml),
+        custom_measure_name: _element_text(measure_xml, "#{@ns}CustomMeasureName"),
+        linked_premises_idrefs: _linked_premises_idrefs(measure_xml),
+        mv_cost: _numeric_element_text(measure_xml, "#{@ns}MVCost"),
+        useful_life: _numeric_element_text(measure_xml, "#{@ns}UsefulLife"),
+        measure_total_first_cost: _numeric_element_text(measure_xml, "#{@ns}MeasureTotalFirstCost"),
+        measure_installation_cost: _numeric_element_text(measure_xml, "#{@ns}MeasureInstallationCost"),
+        measure_material_cost: _numeric_element_text(measure_xml, "#{@ns}MeasureMaterialCost"),
+        om_cost_annual_savings: _numeric_element_text(measure_xml, "#{@ns}MeasureSavingsAnalysis/#{@ns}OMCostAnnualSavings"),
+        implementation_status: _element_text(measure_xml, "#{@ns}ImplementationStatus")
+      }
+    end
+
+    def _technology_category_xml(measure_xml)
+      technology_category_xml = measure_xml.elements["#{@ns}TechnologyCategories/#{@ns}TechnologyCategory"]
+
+      return technology_category_xml&.elements&.[](1)
+    end
+
+    def _technology_category_element_name(technology_category_xml)
+      return nil if technology_category_xml.nil?
+
+      return technology_category_xml.name.to_s.split(':').last
+    end
+
+    def _technology_measure_name(technology_category_xml)
+      return nil if technology_category_xml.nil?
+
+      return _element_text(technology_category_xml, "#{@ns}MeasureName")
+    end
+
+    def _numeric_element_text(xml, path)
+      value = _element_text(xml, path)
+      return nil if value.nil? || value.strip.empty?
+
+      return Float(value)
+    rescue ArgumentError
+      return nil
+    end
+
+    def _package_measure_scenario_warnings(scenario, package_xml, measures)
+      warnings = []
+      context = _scenario_warning_context(scenario)
+      measure_idref_xmls = _measure_idref_xmls(package_xml)
+
+      if _blank?(scenario[:scenario_id])
+        warnings << _parser_warning(:missing_scenario_id, 'Package scenario is missing ID.', context)
+      end
+      if _blank?(scenario[:package_id])
+        warnings << _parser_warning(:missing_package_id, 'PackageOfMeasures is missing ID.', context)
+      end
+      if measure_idref_xmls.empty?
+        warnings << _parser_warning(:package_missing_measure_ids, 'Package has no MeasureIDs.', context)
+      end
+
+      measure_idref_xmls.each do |measure_id_xml|
+        if _blank?(measure_id_xml.attributes['IDref'])
+          warnings << _parser_warning(:missing_measure_idref, 'MeasureID is missing IDref.', context)
+        end
+      end
+
+      resolved_measures = []
+      scenario[:measure_ids].each do |measure_idref|
+        measure = measures[measure_idref]
+        if measure.nil?
+          warnings << _parser_warning(
+            :unresolved_measure_idref,
+            'Package references an unknown measure ID.',
+            context.merge(measure_idref:)
+          )
+        else
+          resolved_measures << measure
+          warnings.concat(_measure_parser_warnings(measure, context))
+        end
+      end
+
+      if resolved_measures.none? { |measure| _usable_package_measure?(measure) }
+        warnings << _parser_warning(:package_has_no_usable_measures, 'Package has no usable measures.', context)
+      end
+
+      return warnings
+    end
+
+    def _measure_parser_warnings(measure, scenario_context)
+      warnings = []
+      context = scenario_context.merge(measure_id: measure[:measure_id])
+
+      if _blank?(measure[:system_category_affected])
+        warnings << _parser_warning(:missing_system_category_affected, 'Measure is missing SystemCategoryAffected.', context)
+      end
+      if _blank?(measure[:technology_category_element_name])
+        warnings << _parser_warning(:missing_technology_category, 'Measure is missing a usable technology category.', context)
+      end
+      if _blank?(measure[:measure_name])
+        warnings << _parser_warning(:missing_measure_name, 'Measure is missing MeasureName.', context)
+      end
+
+      return warnings
+    end
+
+    def _scenario_warning_context(scenario)
+      return {
+        report_id: scenario[:report_id],
+        scenario_id: scenario[:scenario_id],
+        package_id: scenario[:package_id]
+      }
+    end
+
+    def _parser_warning(code, message, context = {})
+      return {
+        code:,
+        severity: :warning,
+        message:
+      }.merge(context)
+    end
+
+    def _blank?(value)
+      return true if value.nil?
+
+      return value.to_s.strip.empty?
+    end
+
+    def _usable_package_measure?(measure)
+      return false if _blank?(measure[:measure_name])
+
+      return !_blank?(measure[:system_category_affected]) || !_blank?(measure[:technology_category_element_name])
+    end
+
+    def _scenario_hash(report_xml, scenario_xml)
+      package_xml = _package_of_measures_xml(scenario_xml)
+
+      return {
+        scenario_id: scenario_xml.attributes['ID'],
+        scenario_name: _element_text(scenario_xml, "#{@ns}ScenarioName"),
+        temporal_status: _element_text(scenario_xml, "#{@ns}TemporalStatus"),
+        report_id: report_xml.attributes['ID'],
+        scenario_type: _scenario_type(scenario_xml, package_xml),
+        package_id: package_xml&.attributes&.[]('ID'),
+        reference_case_id: package_xml&.elements&.[]("#{@ns}ReferenceCase")&.attributes&.[]('IDref'),
+        measure_ids: _measure_idrefs(package_xml),
+        linked_premises_idrefs: _linked_premises_idrefs(scenario_xml)
+      }
+    end
+
+    def _scenario_type(scenario_xml, package_xml)
+      return :package_of_measures if !package_xml.nil?
+
+      current_building_xml = scenario_xml.elements["#{@ns}ScenarioType/#{@ns}CurrentBuilding"]
+      return :current_building if !current_building_xml.nil?
+
+      return :other
+    end
+
+    def _package_of_measures_xml(scenario_xml)
+      return scenario_xml.elements["#{@ns}ScenarioType/#{@ns}PackageOfMeasures"]
+    end
+
+    def _element_text(xml, path)
+      return xml.elements[path]&.text
+    end
+
+    def _measure_idrefs(package_xml)
+      return [] if package_xml.nil?
+
+      measure_ids = []
+      _measure_idref_xmls(package_xml).each do |measure_id_xml|
+        measure_id = measure_id_xml.attributes['IDref']
+        measure_ids << measure_id if !measure_id.nil?
+      end
+      return measure_ids
+    end
+
+    def _measure_idref_xmls(package_xml)
+      return [] if package_xml.nil?
+
+      measure_idref_xmls = []
+      package_xml.elements.each("#{@ns}MeasureIDs/#{@ns}MeasureID") do |measure_id_xml|
+        measure_idref_xmls << measure_id_xml
+      end
+      return measure_idref_xmls
+    end
+
+    def _linked_premises_idrefs(xml)
+      linked_premises_xml = xml.elements["#{@ns}LinkedPremises"]
+      return [] if linked_premises_xml.nil?
+
+      return _descendant_idrefs(linked_premises_xml)
+    end
+
+    def _descendant_idrefs(xml)
+      idrefs = []
+      xml.each_element do |child_xml|
+        idref = child_xml.attributes['IDref']
+        idrefs << idref if !idref.nil?
+        idrefs.concat(_descendant_idrefs(child_xml))
+      end
+
+      return idrefs
     end
   end
 end
