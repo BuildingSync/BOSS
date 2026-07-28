@@ -346,6 +346,124 @@ RSpec.describe 'BuildingSyncReader' do
     end
   end
 
+  describe 'get_parser_warnings should' do
+    it 'return no warnings for complete package scenarios' do
+      # Set Up
+      doc = load_fixture_doc('v2.7.0', 'BuildingEQ-1.0.0.xml')
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_parser_warnings).to eq []
+    end
+
+    it 'return no warnings when no package scenarios exist' do
+      # Set Up
+      doc = load_fixture_doc('v2.7.0', 'building_151_no_measures.xml')
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      # Assert
+      expect(buidingsync_reader.get_parser_warnings).to eq []
+    end
+
+    it 'warn for incomplete package measure metadata' do
+      # Set Up
+      doc = load_fixture_doc('v2.7.0', 'Golden Test File.xml')
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      warnings = buidingsync_reader.get_parser_warnings
+
+      # Assert
+      expect(warnings.map { |warning| warning[:severity] }.uniq).to eq [:warning]
+      expect(warnings.map { |warning| warning[:code] }).to contain_exactly(
+        :missing_system_category_affected,
+        :missing_technology_category,
+        :missing_measure_name,
+        :package_has_no_usable_measures,
+        :missing_system_category_affected,
+        :missing_technology_category,
+        :missing_measure_name,
+        :package_has_no_usable_measures
+      )
+
+      building_measure_warning = warnings.find do |warning|
+        warning[:measure_id] == 'Building1RemovePV' && warning[:code] == :missing_measure_name
+      end
+      expect(building_measure_warning).to include(
+        report_id: 'Report-c1857e54-836b-4674-95f4-2e6e9c8510b4',
+        scenario_id: 'Scenario1',
+        package_id: 'PackageOfMeasures-b9ca1b63-acd6-4d8a-9d8f-f39a96fd8dac'
+      )
+    end
+
+    it 'warn for malformed package scenario references' do
+      # Set Up
+      doc = REXML::Document.new wrap_in_facility(<<~XML)
+        <Measures>
+          <Measure>
+            <SystemCategoryAffected>Lighting</SystemCategoryAffected>
+            <TechnologyCategories>
+              <TechnologyCategory>
+                <LightingImprovements>
+                  <MeasureName>Install lighting controls</MeasureName>
+                </LightingImprovements>
+              </TechnologyCategory>
+            </TechnologyCategories>
+          </Measure>
+        </Measures>
+        <Reports>
+          <Report ID="ReportA">
+            <Scenarios>
+              <Scenario>
+                <ScenarioType>
+                  <PackageOfMeasures>
+                    <MeasureIDs>
+                      <MeasureID/>
+                      <MeasureID IDref="UnknownMeasure"/>
+                    </MeasureIDs>
+                  </PackageOfMeasures>
+                </ScenarioType>
+              </Scenario>
+              <Scenario ID="EmptyScenario">
+                <ScenarioType>
+                  <PackageOfMeasures ID="EmptyPackage"/>
+                </ScenarioType>
+              </Scenario>
+            </Scenarios>
+          </Report>
+        </Reports>
+      XML
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      warnings = buidingsync_reader.get_parser_warnings
+
+      # Assert
+      expect(warnings.map { |warning| warning[:code] }).to contain_exactly(
+        :missing_measure_id,
+        :missing_scenario_id,
+        :missing_package_id,
+        :missing_measure_idref,
+        :unresolved_measure_idref,
+        :package_has_no_usable_measures,
+        :package_missing_measure_ids,
+        :package_has_no_usable_measures
+      )
+
+      unresolved_warning = warnings.find { |warning| warning[:code] == :unresolved_measure_idref }
+      expect(unresolved_warning).to include(
+        report_id: 'ReportA',
+        scenario_id: nil,
+        package_id: nil,
+        measure_idref: 'UnknownMeasure'
+      )
+    end
+  end
+
   describe 'get_climate_zone should' do
     it "get from site" do
       # Set Up

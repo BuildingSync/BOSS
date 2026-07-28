@@ -53,6 +53,23 @@ module BOSS
       return measures
     end
 
+    def get_parser_warnings
+      warnings = []
+      measures = get_measures
+
+      _measure_xmls.each do |measure_xml|
+        measure = _measure_hash(measure_xml)
+        warnings << _parser_warning(:missing_measure_id, 'Measure is missing ID.') if _blank?(measure[:measure_id])
+      end
+
+      _package_measure_scenario_xmls.each do |report_xml, scenario_xml, package_xml|
+        scenario = _scenario_hash(report_xml, scenario_xml)
+        warnings.concat(_package_measure_scenario_warnings(scenario, package_xml, measures))
+      end
+
+      return warnings
+    end
+
     # tries to get weather file from:
     #  1. given weather file
     #  2. city state from either building or site
@@ -347,6 +364,18 @@ module BOSS
       return measure_xmls
     end
 
+    def _package_measure_scenario_xmls
+      scenario_xmls = []
+      @facility_xml&.elements&.each("#{@ns}Reports/#{@ns}Report") do |report_xml|
+        report_xml.elements.each("#{@ns}Scenarios/#{@ns}Scenario") do |scenario_xml|
+          package_xml = _package_of_measures_xml(scenario_xml)
+          scenario_xmls << [report_xml, scenario_xml, package_xml] if !package_xml.nil?
+        end
+      end
+
+      return scenario_xmls
+    end
+
     def _measure_hash(measure_xml)
       technology_category_xml = _technology_category_xml(measure_xml)
 
@@ -394,6 +423,94 @@ module BOSS
       return nil
     end
 
+    def _package_measure_scenario_warnings(scenario, package_xml, measures)
+      warnings = []
+      context = _scenario_warning_context(scenario)
+      measure_idref_xmls = _measure_idref_xmls(package_xml)
+
+      if _blank?(scenario[:scenario_id])
+        warnings << _parser_warning(:missing_scenario_id, 'Package scenario is missing ID.', context)
+      end
+      if _blank?(scenario[:package_id])
+        warnings << _parser_warning(:missing_package_id, 'PackageOfMeasures is missing ID.', context)
+      end
+      if measure_idref_xmls.empty?
+        warnings << _parser_warning(:package_missing_measure_ids, 'Package has no MeasureIDs.', context)
+      end
+
+      measure_idref_xmls.each do |measure_id_xml|
+        if _blank?(measure_id_xml.attributes['IDref'])
+          warnings << _parser_warning(:missing_measure_idref, 'MeasureID is missing IDref.', context)
+        end
+      end
+
+      resolved_measures = []
+      scenario[:measure_ids].each do |measure_idref|
+        measure = measures[measure_idref]
+        if measure.nil?
+          warnings << _parser_warning(
+            :unresolved_measure_idref,
+            'Package references an unknown measure ID.',
+            context.merge(measure_idref:)
+          )
+        else
+          resolved_measures << measure
+          warnings.concat(_measure_parser_warnings(measure, context))
+        end
+      end
+
+      if resolved_measures.none? { |measure| _usable_package_measure?(measure) }
+        warnings << _parser_warning(:package_has_no_usable_measures, 'Package has no usable measures.', context)
+      end
+
+      return warnings
+    end
+
+    def _measure_parser_warnings(measure, scenario_context)
+      warnings = []
+      context = scenario_context.merge(measure_id: measure[:measure_id])
+
+      if _blank?(measure[:system_category_affected])
+        warnings << _parser_warning(:missing_system_category_affected, 'Measure is missing SystemCategoryAffected.', context)
+      end
+      if _blank?(measure[:technology_category_element_name])
+        warnings << _parser_warning(:missing_technology_category, 'Measure is missing a usable technology category.', context)
+      end
+      if _blank?(measure[:measure_name])
+        warnings << _parser_warning(:missing_measure_name, 'Measure is missing MeasureName.', context)
+      end
+
+      return warnings
+    end
+
+    def _scenario_warning_context(scenario)
+      return {
+        report_id: scenario[:report_id],
+        scenario_id: scenario[:scenario_id],
+        package_id: scenario[:package_id]
+      }
+    end
+
+    def _parser_warning(code, message, context = {})
+      return {
+        code:,
+        severity: :warning,
+        message:
+      }.merge(context)
+    end
+
+    def _blank?(value)
+      return true if value.nil?
+
+      return value.to_s.strip.empty?
+    end
+
+    def _usable_package_measure?(measure)
+      return false if _blank?(measure[:measure_name])
+
+      return !_blank?(measure[:system_category_affected]) || !_blank?(measure[:technology_category_element_name])
+    end
+
     def _scenario_hash(report_xml, scenario_xml)
       package_xml = _package_of_measures_xml(scenario_xml)
 
@@ -431,11 +548,21 @@ module BOSS
       return [] if package_xml.nil?
 
       measure_ids = []
-      package_xml.elements.each("#{@ns}MeasureIDs/#{@ns}MeasureID") do |measure_id_xml|
+      _measure_idref_xmls(package_xml).each do |measure_id_xml|
         measure_id = measure_id_xml.attributes['IDref']
         measure_ids << measure_id if !measure_id.nil?
       end
       return measure_ids
+    end
+
+    def _measure_idref_xmls(package_xml)
+      return [] if package_xml.nil?
+
+      measure_idref_xmls = []
+      package_xml.elements.each("#{@ns}MeasureIDs/#{@ns}MeasureID") do |measure_id_xml|
+        measure_idref_xmls << measure_id_xml
+      end
+      return measure_idref_xmls
     end
 
     def _linked_premises_idrefs(xml)
