@@ -1,0 +1,177 @@
+{
+  "schema_version": "1.0",
+  "lookup_order": [
+    "system_category_affected_and_measure_name"
+  ],
+  "mappings": [
+    {
+      "system_category_affected": "Air Distribution",
+      "technology_category_element_name": "OtherHVAC",
+      "measure_name": "Add or repair economizer",
+      "steps": [
+        {
+          "measure_dir_name": "EnableEconomizerControl",
+          "arguments": {
+            "__SKIP__": false,
+            "economizer_type": "FixedDryBulb"
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Air Distribution",
+      "technology_category_element_name": "OtherHVAC",
+      "measure_name": "Install demand control ventilation",
+      "steps": [
+        {
+          "measure_dir_name": "EnableDemandControlledVentilation",
+          "arguments": {
+            "__SKIP__": false,
+            "dcv_type": "EnableDCV"
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Ceiling",
+      "technology_category_element_name": "BuildingEnvelopeModifications",
+      "measure_name": "Increase ceiling insulation",
+      "steps": [
+        {
+          "measure_dir_name": "IncreaseInsulationRValueForRoofsByPercentage",
+          "arguments": {
+            "__SKIP__": false,
+            "r_value": 20
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "General Controls and Operations",
+      "technology_category_element_name": "OtherHVAC",
+      "measure_name": "Upgrade operating protocols, calibration, and/or sequencing",
+      "steps": [
+        {
+          "measure_dir_name": "AdjustThermostatSetpointsByDegrees",
+          "arguments": {
+            "__SKIP__": false,
+            "cooling_adjustment": 1.0,
+            "heating_adjustment": -1.0
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Lighting",
+      "technology_category_element_name": "LightingImprovements",
+      "measure_name": "Add occupancy sensors",
+      "steps": [
+        {
+          "measure_dir_name": "ReduceLightingLoadsByPercentage",
+          "arguments": {
+            "__SKIP__": false,
+            "lighting_power_reduction_percent": 5
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Lighting",
+      "technology_category_element_name": "LightingImprovements",
+      "measure_name": "Retrofit with light emitting diode technologies",
+      "steps": [
+        {
+          "measure_dir_name": "SetLightingLoadsByLPD",
+          "arguments": {
+            "__SKIP__": false,
+            "lpd": 0.6
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Plug Load",
+      "technology_category_element_name": "PlugLoadReductions",
+      "measure_name": "Install plug load controls",
+      "steps": [
+        {
+          "measure_dir_name": "ReduceElectricEquipmentLoadsByPercentage",
+          "arguments": {
+            "__SKIP__": false,
+            "elecequip_power_reduction_percent": 20.0
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Refrigeration",
+      "technology_category_element_name": "Refrigeration",
+      "measure_name": "Replace ice/refrigeration equipment with high efficiency units",
+      "steps": [
+        {
+          "measure_dir_name": "ReduceElectricEquipmentLoadsByPercentage",
+          "arguments": {
+            "__SKIP__": false,
+            "elecequip_power_reduction_percent": 5
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Roof",
+      "technology_category_element_name": "BuildingEnvelopeModifications",
+      "measure_name": "Increase roof insulation",
+      "steps": [
+        {
+          "measure_dir_name": "IncreaseInsulationRValueForRoofs",
+          "arguments": {
+            "__SKIP__": false,
+            "r_value": 30
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Wall",
+      "technology_category_element_name": "BuildingEnvelopeModifications",
+      "measure_name": "Air seal envelope",
+      "steps": [
+        {
+          "measure_dir_name": "ReduceSpaceInfiltrationByPercentage",
+          "arguments": {
+            "__SKIP__": false,
+            "space_infiltration_reduction_percent": 30.0
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Wall",
+      "technology_category_element_name": "BuildingEnvelopeModifications",
+      "measure_name": "Increase wall insulation",
+      "steps": [
+        {
+          "measure_dir_name": "IncreaseInsulationRValueForExteriorWalls",
+          "arguments": {
+            "__SKIP__": false,
+            "r_value": 25
+          }
+        }
+      ]
+    },
+    {
+      "system_category_affected": "Wall",
+      "technology_category_element_name": "BuildingEnvelopeModifications",
+      "measure_name": "Insulate thermal bypasses",
+      "steps": [
+        {
+          "measure_dir_name": "IncreaseInsulationRValueForExteriorWallsByPercentage",
+          "arguments": {
+            "__SKIP__": false,
+            "r_value": 20
+          }
+        }
+      ]
+    }
+  ]
+}
