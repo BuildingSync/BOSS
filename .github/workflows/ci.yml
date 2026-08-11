@@ -25,9 +25,5 @@ jobs:
         gem install bundler -v 2.4.10
         bundle config set --local path "$GITHUB_WORKSPACE/.bundle/install"
         bundle install
-    - name: Run Integration Tests
-      run: bundle exec rspec spec/tests/integration/write_and_run_osws_spec.rb
-      if: always()
-    - name: Run Unit Tests
-      run: bundle exec rspec spec/tests/unit/buildingsync_reader_spec.rb
-      if: always()
+    - name: Run Tests
+      run: bundle exec rspec

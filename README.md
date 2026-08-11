@@ -21,6 +21,30 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
     bundle install
     ```
 
+4. Install external non-gem measure repositories declared in the shipped manifest.
+
+    ```bash
+    bundle exec rake measures:install_external
+    ```
+
+5. (Optional) List resolved external measure roots.
+
+    ```bash
+    bundle exec rake measures:list_external
+    ```
+
+The shipped manifest lives at [config/external_measure_repos.yml](config/external_measure_repos.yml) and is preconfigured with:
+
+- local measure roots: `lib/measures` (first in precedence)
+- external repository: comstock (`measures` and `resources/measures`)
+
+Measure path precedence is:
+
+1. local measure roots from [config/external_measure_repos.yml](config/external_measure_repos.yml)
+2. gem-provided measure directories
+3. external non-gem repository measure roots from [config/external_measure_repos.yml](config/external_measure_repos.yml)
+
+The generated `in.osw` will include these paths in order under `measure_paths`.
 
 ## OpenStudio Compatibility Version
 
@@ -97,6 +121,11 @@ bundle exec boss write_baseline_osw BUILDINGSYNC_FILE -o OUTPUT_PATH [options]
 bundle exec boss run_osw BUILDINGSYNC_FILE -o OUTPUT_PATH [options]
 ```
 
+To get help text, type the following:
+```bash
+bundle exec boss help [COMMAND]
+```
+
 ### Options
 
 - `-o`, `--output_path` (required): directory where BOSS writes output (for example, use an XML-specific folder such as `output/v2.7.0/L100_Audit-1.0.0`)
@@ -131,7 +160,6 @@ Use this when `output/v2.7.0/L100_Audit-1.0.0/baseline/in.osw` already exists:
 
 ```bash
 bundle exec boss run_osw \
-    "spec/files/v2.7.0/L100_Audit-1.0.0.xml" \
     -o output/v2.7.0/L100_Audit-1.0.0
 ```
 

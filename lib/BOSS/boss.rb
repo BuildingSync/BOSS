@@ -9,6 +9,7 @@ require 'rexml/document'
 require 'fileutils'
 require 'BOSS/buildingsync_reader/buildingsync_reader'
 require 'BOSS/osw_arg_populator'
+require 'BOSS/external_measure_repo_manager'
 
 require 'openstudio/common_measures'
 require 'openstudio/model_articulation'
@@ -20,7 +21,8 @@ module BOSS
     # @param output_dir [String]
     # @param epw_file_path [String] if provided, full/path/to/my.epw
     # @param standard_to_be_used [String]
-    def self.write_baseline_osw(xml_file_path, output_dir, epw_file_path, standard_to_be_used)
+    class << self
+    def write_baseline_osw(xml_file_path, output_dir, epw_file_path, standard_to_be_used)
       # check file exists
       if !File.exist?(xml_file_path)
         message = "File '#{xml_file_path}' does not exist"
@@ -48,6 +50,31 @@ module BOSS
       OSWArgPopulator::populate_set_electric_equipment_loads_by_epd_args(baseline_osw, bsync_reader)
       OSWArgPopulator::populate_openstudio_results_args(baseline_osw, bsync_reader)
 
+      # Gather extension-derived paths (typically gem-based measures/files) from ObjectSpace.
+      OpenStudio::Extension.configure_osw(baseline_osw)
+
+      # Force ordering: local BOSS measures, extension-discovered (gems), then external repos.
+      manager = ExternalMeasureRepoManager.new
+      local_measure_dirs = manager.local_measure_directories
+      external_measure_dirs = manager.resolved_measure_directories
+      discovered_measure_dirs = baseline_osw[:measure_paths] || []
+
+      discovered_nonlocal_nonexternal = discovered_measure_dirs.reject do |path|
+        local_measure_dirs.include?(path) || external_measure_dirs.include?(path)
+      end
+
+      baseline_osw[:measure_paths] = ordered_unique(local_measure_dirs + discovered_nonlocal_nonexternal + external_measure_dirs)
+
+      local_file_paths = local_measure_dirs.map { |path| measure_path_to_files_path(path) }
+      external_file_paths = external_measure_dirs.map { |path| measure_path_to_files_path(path) }
+      discovered_file_paths = baseline_osw[:file_paths] || []
+
+      discovered_file_nonlocal_nonexternal = discovered_file_paths.reject do |path|
+        local_file_paths.include?(path) || external_file_paths.include?(path)
+      end
+
+      baseline_osw[:file_paths] = ordered_unique(local_file_paths + discovered_file_nonlocal_nonexternal + external_file_paths)
+
       # write to file
       workflow_dir = File.join(output_dir, 'baseline')
       FileUtils.mkdir_p(workflow_dir)
@@ -59,7 +86,7 @@ module BOSS
     end
 
     # @param osw_dir [String] path to osws
-    def self.run_baseline_osw(osw_dir)
+    def run_baseline_osw(osw_dir)
       # assert we have a baseline osm
       baseline_osw_path = File.join(osw_dir, 'baseline', 'in.osw')
 
@@ -77,6 +104,25 @@ module BOSS
 
       # run the baseline osm
       return runner.run_osws([baseline_osw_path])
+    end
+
+      private
+
+      def measure_path_to_files_path(measure_path)
+        path = measure_path.to_s
+        replaced = path.sub(%r{/measures/?$}, '/files')
+        return replaced if replaced != path
+
+        File.expand_path(File.join(path, '..', 'files'))
+      end
+
+      def ordered_unique(paths)
+        (paths || []).each_with_object([]) do |path, acc|
+          next if path.nil? || path.empty? || acc.include?(path)
+
+          acc << path
+        end
+      end
     end
   end
 end
