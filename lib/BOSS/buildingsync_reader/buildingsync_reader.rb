@@ -334,7 +334,7 @@ module BOSS
         fenestration_u_factor = window.elements["#{@ns}FenestrationUFactor"]&.text
         if fenestration_u_factor.nil?
           fenestration_r_value = window.elements["#{@ns}FenestrationRValue"]&.text
-          if !fenestration_r_value.nil? then fenestration_u_factor = 1 / fenestration_r_value end
+          if !fenestration_r_value.nil? then fenestration_u_factor = (1.0 / fenestration_r_value.to_f).to_s end
         end
 
         # map data
@@ -355,7 +355,7 @@ module BOSS
           return window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance
         end
       end
-        return nil
-    end
+    return nil
   end
+end
 end
