@@ -25,5 +25,6 @@ jobs:
         gem install bundler -v 2.4.10
         bundle config set --local path "$GITHUB_WORKSPACE/.bundle/install"
         bundle install
+        bundle exec rake measures:install_external
     - name: Run Tests
       run: bundle exec rspec
