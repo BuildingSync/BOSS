@@ -11,6 +11,7 @@ SPEC_OUTPUT_DIR = File.expand_path('../../output', __dir__)
 
 test_configs = [
   # file_name, standard, epw_path, schema_version
+  ['all_measures_applied_example.xml', ASHRAE90_1, nil, 'v2.7.0'], # exercises every measure path; uncomment to run full simulation
   ['179D_Example_Building.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['BETTER-1.0.0_SampleOffice_gemtest.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['building_151.xml', ASHRAE90_1, nil, 'v2.7.0'],

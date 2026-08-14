@@ -212,11 +212,11 @@ module BOSS
     #  1. /YearOfLastMajorRemodel of building
     #  2. /YearOfConstruction of building
     def get_built_year
-      year_of_major_remodel = @building_xml.elements["#{@ns}YearOfLastMajorRemodel"]&.text.to_f
-      return year_of_major_remodel if !year_of_major_remodel.nil?
+      year_of_major_remodel = @building_xml.elements["#{@ns}YearOfLastMajorRemodel"]&.text
+      return year_of_major_remodel.to_f if !year_of_major_remodel.nil?
 
-      year_of_construction = @building_xml.elements["#{@ns}YearOfConstruction"]&.text.to_f
-      return year_of_construction if !year_of_construction.nil?
+      year_of_construction = @building_xml.elements["#{@ns}YearOfConstruction"]&.text
+      return year_of_construction.to_f if !year_of_construction.nil?
     end
 
     #  map year built and standard_to_be_used to a standard_template
