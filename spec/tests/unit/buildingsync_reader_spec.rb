@@ -23,6 +23,24 @@ def wrap_in_site(xml)
   XML
 end
 
+def wrap_in_systems(xml)
+  <<~XML
+    <BuildingSync>
+      <Facilities>
+        <Facility>
+          <Sites>
+            <Site>
+            </Site>
+          </Sites>
+          <Systems>
+            #{xml}
+          </Systems>
+        </Facility>
+      </Facilities>
+    </BuildingSync>
+  XML
+end
+
 RSpec.describe 'BuildingSyncReader' do
   describe 'get_climate_zone should' do
     it "get from site" do
@@ -334,24 +352,6 @@ RSpec.describe 'BuildingSyncReader' do
   end
 
   describe 'get_total_weighted_average_load should' do
-    def wrap_in_systems(xml)
-      <<~XML
-        <BuildingSync>
-          <Facilities>
-            <Facility>
-              <Sites>
-                <Site>
-                </Site>
-              </Sites>
-              <Systems>
-                #{xml}
-              </Systems>
-            </Facility>
-          </Facilities>
-        </BuildingSync>
-      XML
-    end
-
     it "sum weighted average load" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
@@ -421,6 +421,136 @@ RSpec.describe 'BuildingSyncReader' do
 
       # Assert
       expect(buidingsync_reader.get_total_weighted_average_load).to eq nil
+    end
+  end
+
+  describe 'get_window_data should' do
+      good_window = <<~XML
+        <FenestrationSystem ID='1' xmlns:auc=\"http://buildingsync.net/schemas/bedes-auc/2019\">
+          <FenestrationType>
+            <Window/>
+          </FenestrationType>
+          <FenestrationFrameMaterial>Aluminum no thermal break</FenestrationFrameMaterial>
+          <FenestrationOperation>false</FenestrationOperation>
+          <TightnessFitCondition>Average</TightnessFitCondition>
+          <GlassType>Clear uncoated</GlassType>
+          <FenestrationGlassLayers>Single pane</FenestrationGlassLayers>
+          <SolarHeatGainCoefficient>0.391000</SolarHeatGainCoefficient>
+          <VisibleTransmittance>0.391000</VisibleTransmittance>
+          <FenestrationUFactor>3.241000</FenestrationUFactor>
+        </FenestrationSystem>
+      XML
+      invalid_window = <<~XML
+        <FenestrationSystem ID='2' xmlns:auc=\"http://buildingsync.net/schemas/bedes-auc/2019\">
+          <FenestrationType>
+            <Window/>
+          </FenestrationType>
+          <FenestrationFrameMaterial>Fiberglass</FenestrationFrameMaterial>
+          <FenestrationOperation>false</FenestrationOperation>
+          <TightnessFitCondition>Average</TightnessFitCondition>
+          <GlassType>Clear uncoated</GlassType>
+          <FenestrationGlassLayers>Single pane</FenestrationGlassLayers>
+          <SolarHeatGainCoefficient>0.391000</SolarHeatGainCoefficient>
+          <VisibleTransmittance>0.391000</VisibleTransmittance>
+          <FenestrationUFactor>3.241000</FenestrationUFactor>
+        </FenestrationSystem>
+      XML
+      door = <<~XML
+        <FenestrationSystem ID=\"FenestrationSystemType-45021100\">
+          <FenestrationType>
+            <Door>
+              <ExteriorDoorType>Uninsulated metal</ExteriorDoorType>
+            </Door>
+          </FenestrationType>
+        </FenestrationSystem>
+      XML
+
+    it "work in happy case" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(<<~XML)
+        <FenestrationSystems>
+          #{good_window}
+        </FenestrationSystems>
+      XML
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance = buidingsync_reader.get_window_data
+
+      # Assertion
+      expect(window_pane_type).to eq "Single - No LowE - Clear - Aluminum"
+      expect(fenestration_u_factor).to eq "3.241000"
+      expect(solar_heat_gain_coefficient).to eq "0.391000"
+      expect(visible_transmittance).to eq "0.391000"
+    end
+
+    it "ignore doors and skylights" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(<<~XML)
+        <FenestrationSystems>
+          #{door}
+          #{good_window}
+        </FenestrationSystems>
+      XML
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance = buidingsync_reader.get_window_data
+
+      # Assertion
+      expect(window_pane_type).to eq "Single - No LowE - Clear - Aluminum"
+      expect(fenestration_u_factor).to eq "3.241000"
+      expect(solar_heat_gain_coefficient).to eq "0.391000"
+      expect(visible_transmittance).to eq "0.391000"
+    end
+
+    it "work if first window is invalid but second isnt" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(<<~XML)
+        <FenestrationSystems>
+          #{invalid_window}
+          #{good_window}
+        </FenestrationSystems>
+      XML
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance = buidingsync_reader.get_window_data
+
+      # Assertion
+      expect(window_pane_type).to eq "Single - No LowE - Clear - Aluminum"
+      expect(fenestration_u_factor).to eq "3.241000"
+      expect(solar_heat_gain_coefficient).to eq "0.391000"
+      expect(visible_transmittance).to eq "0.391000"
+    end
+
+    it "return nil if there are no windows" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems("")
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance = buidingsync_reader.get_window_data
+
+      # Assertion
+      expect(window_pane_type).to eq nil
+    end
+
+    # warn not error
+    it "return nil if all windows are invalid" do
+      # Set Up
+      doc = REXML::Document.new wrap_in_systems(<<~XML)
+        <FenestrationSystems>
+          #{invalid_window}
+        </FenestrationSystems>
+      XML
+
+      # Action
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance = buidingsync_reader.get_window_data
+
+      # Assertion
+      expect(window_pane_type).to eq nil
     end
   end
 end
