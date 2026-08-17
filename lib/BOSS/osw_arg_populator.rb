@@ -268,6 +268,28 @@ class OSWArgPopulator
     BOSS.BOSS_logger.info("")
   end
 
+  def self.populate_replace_baseline_windows_args(osw, bsync_reader)
+    osw[:steps].append({"measure_dir_name": "replace_baseline_windows", "arguments": {}})
+    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "replace_baseline_windows", key, value) }
+
+    # skip if no window_data
+    window_data = bsync_reader.get_window_data
+    if window_data.nil?
+      set_measure_argument.call("__SKIP__", true)
+      return
+    end
+    window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance = window_data
+
+    # Add args
+    # -  __SKIP__
+    set_measure_argument.call("__SKIP__", false)
+    set_measure_argument.call("window_pane_type", window_pane_type)
+    set_measure_argument.call("u_value_ip", fenestration_u_factor)
+    set_measure_argument.call("shgc", solar_heat_gain_coefficient)
+    set_measure_argument.call("vlt", visible_transmittance)
+
+  end
+
   def self.populate_openstudio_results_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("+++++++++++++++++++++++++ populating measure openstudio_results +++++++++++++++++++++")
     osw[:steps].append({"measure_dir_name": "openstudio_results", "arguments": {}})
