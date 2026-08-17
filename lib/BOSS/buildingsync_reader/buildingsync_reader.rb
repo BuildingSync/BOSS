@@ -113,11 +113,36 @@ module BOSS
       return city, state if !city.nil? && !state.nil?
     end
 
+    # tries to get occupancy classification from:
+    #  1. OccupancyClassification directly on the building
+    #  2. OccupancyClassification of the building's sections: if only one section has it, use that one;
+    #     if multiple sections have it, use the one attached to the largest floor area
+    def get_occupancy_classification
+      occupancy_classification = @building_xml.elements["#{@ns}OccupancyClassification"]&.text
+      return occupancy_classification if !occupancy_classification.nil?
+
+      section_elements = @building_xml.elements.each("#{@ns}Sections/#{@ns}Section"){|s| s}
+      return nil if section_elements.nil?
+
+      candidates = section_elements.filter_map do |section_element|
+        section_occupancy_classification = section_element.elements["#{@ns}OccupancyClassification"]&.text
+        next if section_occupancy_classification.nil?
+
+        section_floor_areas_xml = section_element.elements["#{@ns}FloorAreas"]
+        section_floor_area = !section_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(section_floor_areas_xml) : 0
+        {occupancy_classification: section_occupancy_classification, floor_area: section_floor_area}
+      end
+      return nil if candidates.empty?
+      return candidates.first[:occupancy_classification] if candidates.length == 1
+
+      return candidates.max_by { |candidate| candidate[:floor_area] }[:occupancy_classification]
+    end
+
     # Use buildings OccupancyClassification, total_floor_area, and total_number_floors to find a openstudio mapping in building_types_by_occupancy_classification.json
     def get_building_type_and_bar_division_method
       BOSS.BOSS_logger.info("|\t|\t- gathering requirements of building type from file...")
       BOSS.BOSS_logger.info("|\t|\t|\t- getting occupancy classification...")
-      occupancy_classification = @building_xml.elements["#{@ns}OccupancyClassification"].text
+      occupancy_classification = get_occupancy_classification
       BOSS.BOSS_logger.info("|\t|\t|\t  occupancy classification: #{occupancy_classification}")
       BOSS.BOSS_logger.info("|\t|\t|\t- getting total floor area...")
       total_floor_area = get_total_floor_area(num_indent=4)
@@ -269,7 +294,7 @@ module BOSS
     #  2. /YearOfConstruction of building
     def get_built_year
       BOSS.BOSS_logger.info("|\t|\t|\t|\t- checking year of major remodel...")
-      ear_of_major_remodel = @building_xml.elements["#{@ns}YearOfLastMajorRemodel"]&.text
+      year_of_major_remodel = @building_xml.elements["#{@ns}YearOfLastMajorRemodel"]&.text
       BOSS.BOSS_logger.info("|\t|\t|\t|\t  year of major remodel: #{year_of_major_remodel}...")
       return year_of_major_remodel.to_f if !year_of_major_remodel.nil?
 
