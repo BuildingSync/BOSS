@@ -55,4 +55,18 @@ RSpec.describe 'scenario_measure_map.json' do
 
     expect(actual_sources).to eq expected_sources
   end
+
+  it 'uses buildingsync-measures-gem envelope insulation targets in SI units' do
+    targets = mappings.to_h do |mapping|
+      [[mapping.fetch('system_category_affected'), mapping.fetch('measure_name')], mapping.fetch('steps').first]
+    end
+
+    roof_step = targets.fetch(['Roof', 'Increase roof insulation'])
+    wall_step = targets.fetch(['Wall', 'Increase wall insulation'])
+
+    expect(roof_step.fetch('measure_dir_name')).to eq 'modify_envelope_insulation'
+    expect(roof_step.fetch('arguments')).to include('roof_target_rvalue' => 5.28)
+    expect(wall_step.fetch('measure_dir_name')).to eq 'modify_envelope_insulation'
+    expect(wall_step.fetch('arguments')).to include('wall_target_rvalue' => 4.4)
+  end
 end
