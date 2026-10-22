@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  All-measures example BuildingSync file for BOSS integration testing.
+  Designed so that every currently supported measure path is exercised
+  (i.e. none are skipped).  Add content here when a new measure is added.
+
+  Measures covered:
+    set_run_period                        - always applied; no BSync data needed
+    ChangeBuildingLocation                - Address (City/State) + ClimateZoneType (ASHRAE)
+    create_bar_from_building_type_ratios  - OccupancyClassification, FloorAreas, floors,
+                                           YearOfConstruction, AspectRatio, Sections/FloorToFloorHeight
+    create_typical_building_from_model    - HVACSystem/PrincipalHVACSystemType
+    SetLightingLoadsByLPD                 - LightingSystem/InstalledPower
+    set_electric_equipment_loads_by_epd   - PlugLoad/WeightedAverageLoad
+    replace_baseline_windows              - FenestrationSystem with Window and all mappable fields
+    openstudio_results                    - always applied; no BSync data needed
+-->
+<auc:BuildingSync version="2.7.0"
+  xmlns:auc="http://buildingsync.net/schemas/bedes-auc/2019">
+  <auc:Facilities>
+    <auc:Facility ID="Facility-1">
+      <auc:Sites>
+        <auc:Site ID="Site-1">
+          <auc:Buildings>
+            <auc:Building ID="Building-1">
+              <auc:PremisesName>All Measures Example Building</auc:PremisesName>
+
+              <!-- ChangeBuildingLocation: city/state for weather file lookup -->
+              <auc:Address>
+                <auc:City>Denver</auc:City>
+                <auc:State>CO</auc:State>
+              </auc:Address>
+
+              <!-- ChangeBuildingLocation: fallback climate zone if city lookup fails -->
+              <auc:ClimateZoneType>
+                <auc:ASHRAE>
+                  <auc:ClimateZone>5B</auc:ClimateZone>
+                </auc:ASHRAE>
+              </auc:ClimateZoneType>
+
+              <!-- create_bar_from_building_type_ratios: occupancy type -->
+              <!-- "Office" + 15,000 ft2 maps to SmallOffice (ASHRAE90.1, max 20,000 ft2) -->
+              <auc:OccupancyClassification>Office</auc:OccupancyClassification>
+
+              <!-- create_bar_from_building_type_ratios: floor counts -->
+              <auc:FloorsAboveGrade>2</auc:FloorsAboveGrade>
+              <auc:FloorsBelowGrade>0</auc:FloorsBelowGrade>
+
+              <!-- create_bar_from_building_type_ratios + SetLightingLoadsByLPD
+                   + set_electric_equipment_loads_by_epd: total floor area -->
+              <auc:FloorAreas>
+                <auc:FloorArea>
+                  <auc:FloorAreaType>Gross</auc:FloorAreaType>
+                  <auc:FloorAreaValue>15000.0</auc:FloorAreaValue>
+                </auc:FloorArea>
+              </auc:FloorAreas>
+
+              <!-- create_bar_from_building_type_ratios: footprint shape -->
+              <auc:AspectRatio>1.5</auc:AspectRatio>
+
+              <!-- create_bar_from_building_type_ratios: standard template
+                   2000 -> "DOE Ref 1980-2004" for ASHRAE90.1 -->
+              <auc:YearOfConstruction>2000</auc:YearOfConstruction>
+
+              <!-- create_bar_from_building_type_ratios: floor-to-floor height (ft) -->
+              <auc:Sections>
+                <auc:Section ID="Section-1">
+                  <auc:FloorToFloorHeight>10.0</auc:FloorToFloorHeight>
+                </auc:Section>
+              </auc:Sections>
+            </auc:Building>
+          </auc:Buildings>
+        </auc:Site>
+      </auc:Sites>
+
+      <auc:Systems>
+
+        <!-- create_typical_building_from_model:
+             "Packaged Rooftop Air Conditioner" -> "PSZ-AC with gas unit heaters" -->
+        <auc:HVACSystems>
+          <auc:HVACSystem ID="HVACSystem-1">
+            <auc:PrincipalHVACSystemType>Packaged Rooftop Air Conditioner</auc:PrincipalHVACSystemType>
+          </auc:HVACSystem>
+        </auc:HVACSystems>
+
+        <!-- SetLightingLoadsByLPD:
+             InstalledPower in kW; LPD = 15 kW * 1000 / 15,000 ft2 = 1.0 W/ft2 -->
+        <auc:LightingSystems>
+          <auc:LightingSystem ID="LightingSystem-1">
+            <auc:InstalledPower>15</auc:InstalledPower>
+          </auc:LightingSystem>
+        </auc:LightingSystems>
+
+        <!-- replace_baseline_windows: first Window with all mappable fields is used.
+             Frame:  "Aluminum no thermal break" -> "Aluminum"
+             Glass:  "Clear uncoated"            -> "No LowE - Clear"
+             Layers: "Double pane"               -> "Double"
+             Result: window_pane_type = "Double - No LowE - Clear - Aluminum" -->
+        <auc:FenestrationSystems>
+          <auc:FenestrationSystem ID="FenestrationSystem-1">
+            <auc:FenestrationType>
+              <auc:Window/>
+            </auc:FenestrationType>
+            <auc:FenestrationFrameMaterial>Aluminum no thermal break</auc:FenestrationFrameMaterial>
+            <auc:GlassType>Clear uncoated</auc:GlassType>
+            <auc:FenestrationGlassLayers>Double pane</auc:FenestrationGlassLayers>
+            <auc:FenestrationUFactor>0.50</auc:FenestrationUFactor>
+            <auc:SolarHeatGainCoefficient>0.39</auc:SolarHeatGainCoefficient>
+            <auc:VisibleTransmittance>0.39</auc:VisibleTransmittance>
+          </auc:FenestrationSystem>
+        </auc:FenestrationSystems>
+
+        <!-- set_electric_equipment_loads_by_epd:
+             WeightedAverageLoad in W; EPD = 15,000 W / 15,000 ft2 = 1.0 W/ft2 -->
+        <auc:PlugLoads>
+          <auc:PlugLoad ID="PlugLoad-1">
+            <auc:WeightedAverageLoad>15000</auc:WeightedAverageLoad>
+          </auc:PlugLoad>
+        </auc:PlugLoads>
+
+      </auc:Systems>
+    </auc:Facility>
+  </auc:Facilities>
+</auc:BuildingSync>
