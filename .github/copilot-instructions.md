@@ -19,7 +19,7 @@ BOSS sits between BuildingSync XML data and OpenStudio workflow execution. Sibli
 
 - `../schema` — BuildingSync schema source and examples. Use it to verify XML structure, element names, `ScenarioType`, `PackageOfMeasures`, `Measure`, `MeasureID`, and schema-version behavior. Do not edit it unless the task asks for schema work.
 - `../BuildingSync-gem` — legacy Ruby translator. Use it for workflow concepts and mapping ideas, but verify every behavior against current BOSS dependencies and BuildingSync v2.7 fixtures.
-- `../buildingsync-measures-gem` — related BuildingSync/OpenStudio measure work. Use it as reference for measure patterns.
+- `../buildingsync-measures-gem` — custom BuildingSync OpenStudio measures. Preferred measure source for scenario mappings when a measure fits. New measures BOSS needs that do not exist elsewhere belong here, not in BOSS. Only map to measures merged into the ref BOSS loads.
 - `../openstudio-standards` — OpenStudio standards logic used by the `openstudio-standards` gem. Do not edit it from BOSS unless the issue is proven upstream and the user asks for that change.
 - OpenStudio measure gems declared in `BOSS.gemspec` — `openstudio-common-measures`, `openstudio-ee`, `openstudio-extension`, `openstudio-model-articulation`, and `openstudio-standards`. Verify scenario mapping measure names and arguments against the installed versions used by BOSS.
 

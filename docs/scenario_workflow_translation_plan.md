@@ -102,7 +102,17 @@ Lookup order:
 1. `SystemCategoryAffected` plus `MeasureName`.
 2. Technology category element plus `MeasureName`, when `SystemCategoryAffected` is missing or not useful.
 
-The legacy `../BuildingSync-gem` mapping can be used as background, but do not copy it directly. Every measure directory and argument added to BOSS must be checked against the OpenStudio gems declared in `BOSS.gemspec`.
+The legacy `../BuildingSync-gem` mapping can be used as background, but do not copy it directly.
+
+Measure source order for new mappings:
+
+1. `../buildingsync-measures-gem` custom BuildingSync measures, when one fits the BuildingSync measure semantics.
+2. OpenStudio measure gems declared in `BOSS.gemspec`.
+3. If neither has an applicable measure, add one to `buildingsync-measures-gem` instead of BOSS.
+
+Verify every measure directory and argument against the source BOSS will load: the `BOSS.gemspec` gem versions, or the merged `buildingsync-measures-gem` ref. Do not map to measures that exist only on an unmerged branch.
+
+Keep relative-change mappings (for example "reduce by percentage") on relative measures. Do not swap them for absolute-target measures unless the measure skips models that already meet the target.
 
 Conditional arguments should be data-driven. Use context from the reader, such as building type or principal HVAC system type, instead of per-measure Ruby condition chains.
 
@@ -171,8 +181,8 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 5: Initial Mapping JSON
 
-- Status: Planned
-- Delivered by: -
+- Status: Done
+- Delivered by: PR #10 branch
 - Scope: Add `lib/BOSS/scenario_measure_map.json` with a small verified mapping set from `building_151.xml`.
 - Done when: The JSON is valid and each entry has a source category/name, target `measure_dir_name`, and arguments.
 - Avoid: Copying legacy mappings without checking current measure directories and arguments.
@@ -229,8 +239,8 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 - Status: Planned
 - Delivered by: -
-- Scope: Deep-copy baseline OSW and append mapped retrofit steps in deterministic order.
-- Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments.
+- Scope: Deep-copy baseline OSW and append mapped retrofit steps in deterministic order. Make sure `buildingsync-measures-gem` measures are on the OSW `measure_paths`; `develop` already provides `config/external_measure_repos.yml` for this.
+- Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments, and every mapped `measure_dir_name` resolves from the OSW `measure_paths`.
 - Avoid: Mutating the baseline OSW, omitting baseline creation steps, or using nondeterministic step order.
 
 ### PR 13: Generic OSW Step Helpers
@@ -333,6 +343,17 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/buildingsync_reader_spec.rb` - 33 examples, 0 failures.
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rubocop lib/BOSS/buildingsync_reader/buildingsync_reader.rb spec/tests/unit/buildingsync_reader_spec.rb` - still reports existing style debt and new-cop configuration warnings.
 - Follow-up: PR 5 can add mapping JSON. Mapping-specific warnings remain PR 6/PR 9 scope.
+
+### PR 5: Initial Mapping JSON
+
+- Status: Done
+- Delivered by: PR #10 branch
+- Handoff: `lib/BOSS/scenario_measure_map.json` maps 12 `building_151.xml` category/name pairs to OSW-shaped steps with `measure_dir_name` and an argument hash that includes `__SKIP__`. Source strings match reader output exactly.
+- Handoff: Roof and wall absolute insulation targets use `buildingsync-measures-gem` `modify_envelope_insulation` with SI R-values (R-30 IP = 5.28, R-25 IP = 4.40 m²K/W). Other mappings use `openstudio-ee` or `openstudio-common-measures`. Relative mappings such as air sealing, ceiling insulation by percentage, and thermal bypasses stay on relative measures.
+- Deferred: Daylight controls, package unit replacement, burner replacement, and boiler replacement. The `buildingsync-measures-gem` split HVAC measures (`modify_existing_hvac_equipment_efficiencies`, `modify_existing_plant_equipment`, `hvac_packaged_rooftop_*`) need exact model object or zone names. Map them in PR 8 with context rules after `buildingsync-measures-gem` PR #3 merges.
+- Verification: JSON parse passed; every mapped measure directory and argument was checked against installed `BOSS.gemspec` gems and `buildingsync-measures-gem` `develop`.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_map_spec.rb`.
+- Follow-up: PR 6 adds `BOSS::ScenarioMeasureMapper`. PR 12 must put `buildingsync-measures-gem` on OSW `measure_paths`.
 
 ## Verification Commands
 
