@@ -1,0 +1,38 @@
+{
+  "fixture": "spec/files/v2.7.0/building_151.xml",
+  "measure_count": 16,
+  "scenario": {
+    "scenario_id": "Scenario1",
+    "scenario_name": "LED Only",
+    "temporal_status": null,
+    "report_id": "Report1",
+    "scenario_type": "package_of_measures",
+    "package_id": "PackageOfMeasures1",
+    "reference_case_id": "Baseline",
+    "measure_ids": [
+      "Measure1"
+    ],
+    "linked_premises_idrefs": [
+      "Building151"
+    ]
+  },
+  "resolved_measures": [
+    {
+      "measure_id": "Measure1",
+      "system_category_affected": "Lighting",
+      "technology_category_element_name": "LightingImprovements",
+      "measure_name": "Retrofit with light emitting diode technologies",
+      "custom_measure_name": "TBD",
+      "linked_premises_idrefs": [
+        "Building151"
+      ],
+      "mv_cost": 0.0,
+      "useful_life": 12.0,
+      "measure_total_first_cost": 267390.2,
+      "measure_installation_cost": 0.0,
+      "measure_material_cost": 0.0,
+      "om_cost_annual_savings": null,
+      "implementation_status": "Proposed"
+    }
+  ]
+}
