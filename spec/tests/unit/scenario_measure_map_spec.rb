@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 require 'json'
-
-SCENARIO_MEASURE_MAP_PATH = File.expand_path('../../../lib/BOSS/scenario_measure_map.json', __dir__)
+require 'BOSS/constants'
 
 RSpec.describe 'scenario_measure_map.json' do
   let(:scenario_measure_map) { JSON.parse(File.read(SCENARIO_MEASURE_MAP_PATH)) }
@@ -31,6 +30,15 @@ RSpec.describe 'scenario_measure_map.json' do
         expect(step.fetch('arguments')).not_to include('condition')
       end
     end
+  end
+
+  it 'has unique normalized category and measure name lookup keys' do
+    normalize = ->(value) { value.to_s.strip.squeeze(' ').downcase }
+    keys = mappings.map do |mapping|
+      [normalize.call(mapping.fetch('system_category_affected')), normalize.call(mapping.fetch('measure_name'))]
+    end
+
+    expect(keys.uniq.length).to eq keys.length
   end
 
   it 'covers the verified initial building_151 measure set' do
