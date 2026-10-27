@@ -9,10 +9,15 @@ RSpec.describe 'scenario_measure_map.json' do
 
   it 'defines required mapping fields for each entry' do
     expect(scenario_measure_map.fetch('schema_version')).to eq '1.0'
+    expect(scenario_measure_map.fetch('lookup_order')).to eq [
+      'technology_category_element_name_and_measure_name',
+      'system_category_affected_and_measure_name'
+    ]
     expect(mappings).not_to be_empty
 
     mappings.each do |mapping|
       expect(mapping.fetch('system_category_affected')).not_to be_empty
+      expect(mapping.fetch('technology_category_element_name')).not_to be_empty
       expect(mapping.fetch('measure_name')).not_to be_empty
       expect(mapping.fetch('steps')).not_to be_empty
 
