@@ -1,6 +1,7 @@
 {
   "schema_version": "1.0",
   "lookup_order": [
+    "technology_category_element_name_and_measure_name",
     "system_category_affected_and_measure_name"
   ],
   "mappings": [
