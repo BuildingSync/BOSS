@@ -1,6 +1,6 @@
 # Scenario Workflow Translation Plan
 
-This plan tracks the work needed for BOSS to translate BuildingSync package scenarios into OpenStudio workflows. PRs 1-4 are covered by the current PR. Future PRs should stay small and follow the roadmap below.
+This plan tracks the work needed for BOSS to translate BuildingSync package scenarios into OpenStudio workflows. Roadmap PRs land on the `scenario-workflow` integration branch. Merge `scenario-workflow` into `develop` once the feature is usable end to end (after PR 15). Future PRs should stay small and follow the roadmap below.
 
 ## Goal
 
@@ -150,7 +150,7 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 ### PR 1: Guiding Plan Doc
 
 - Status: Done
-- Delivered by: Current PR #5 branch
+- Delivered by: PR #5, merged into `scenario-workflow` on 2026-10-23
 - Scope: Add this plan and set the first-release boundaries.
 - Done when: The plan explains PR order, acceptance gates, mapping ownership, warnings, scenario selection, and result-writeback scope.
 - Avoid: Leaving scope or ownership ambiguous.
@@ -158,7 +158,7 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 ### PR 2: Scenario Data Model And Discovery
 
 - Status: Done
-- Delivered by: Current PR #5 branch
+- Delivered by: PR #7, merged into `scenario-workflow` via PR #5
 - Scope: Add reader-returned structures for first-facility report-level package scenarios.
 - Done when: Unit tests show `building_151.xml` discovers baseline plus package scenarios and existing reader behavior remains unchanged.
 - Avoid: Hardcoded namespaces, wrong scenario paths, or reader regressions.
@@ -166,7 +166,7 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 ### PR 3: Measure Index
 
 - Status: Done
-- Delivered by: Current PR #5 branch
+- Delivered by: PR #8, merged into `scenario-workflow` via PR #5
 - Scope: Index first-facility measures by ID and extract category, name, linked premises, cost/savings, and implementation metadata.
 - Done when: Tests resolve package `MeasureID` references in `building_151.xml` to parsed measure metadata.
 - Avoid: Silently dropping unresolved refs or crashing on measures without `TechnologyCategories`.
@@ -174,7 +174,7 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 ### PR 4: Parser Warning Contract
 
 - Status: Done
-- Delivered by: Current PR #5 branch
+- Delivered by: PR #9, merged into `scenario-workflow` via PR #5
 - Scope: Add structured parser warnings for missing IDs, unresolved refs, empty packages, missing names, missing categories, and packages with no usable measures.
 - Done when: Tests cover warning cases using `BuildingEQ-1.0.0.xml`, `Golden Test File.xml`, and no-measure fixtures.
 - Avoid: Warnings that only print to stdout or malformed package data that aborts all discovery.
@@ -182,15 +182,15 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 ### PR 5: Initial Mapping JSON
 
 - Status: Done
-- Delivered by: PR #10 branch
+- Delivered by: PR #10, merged into `scenario-workflow` via PR #5
 - Scope: Add `lib/BOSS/scenario_measure_map.json` with a small verified mapping set from `building_151.xml`.
 - Done when: The JSON is valid and each entry has a source category/name, target `measure_dir_name`, and arguments.
 - Avoid: Copying legacy mappings without checking current measure directories and arguments.
 
 ### PR 6: Basic `ScenarioMeasureMapper`
 
-- Status: Planned
-- Delivered by: -
+- Status: Done
+- Delivered by: `scenario-workflow-6-basic-measure-mapper` branch
 - Scope: Load the JSON, normalize lookup keys, and map one parsed BuildingSync measure to OpenStudio step specs by `SystemCategoryAffected` plus `MeasureName`.
 - Done when: Unit tests return expected steps and structured unmapped warnings.
 - Avoid: Mutating reader data, raising on unmapped measures, or hardcoding mapping rules outside JSON.
@@ -240,7 +240,7 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 - Status: Planned
 - Delivered by: -
 - Scope: Deep-copy baseline OSW and append mapped retrofit steps in deterministic order. Make sure `buildingsync-measures-gem` measures are on the OSW `measure_paths`; `develop` already provides `config/external_measure_repos.yml` for this.
-- Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments, and every mapped `measure_dir_name` resolves from the OSW `measure_paths`.
+- Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments, and every mapped `measure_dir_name` resolves from the OSW `measure_paths`. A test covers the LED mapping, whose `SetLightingLoadsByLPD` step also exists in the baseline, and proves the baseline step's arguments are unchanged.
 - Avoid: Mutating the baseline OSW, omitting baseline creation steps, or using nondeterministic step order.
 
 ### PR 13: Generic OSW Step Helpers
@@ -317,7 +317,7 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 ### PR 2: Scenario Data Model And Discovery
 
 - Status: Done
-- Delivered by: Current PR #5 branch
+- Delivered by: PR #7, merged into `scenario-workflow` via PR #5
 - Handoff: `BOSS::BuildingSyncReader#get_report_scenarios` returns first-facility report scenarios as symbol-keyed hashes with `scenario_id`, `scenario_name`, `temporal_status`, `report_id`, `scenario_type`, `package_id`, `reference_case_id`, `measure_ids`, and `linked_premises_idrefs`.
 - Handoff: `BOSS::BuildingSyncReader#get_package_measure_scenarios` filters those records to package-of-measures scenarios. PR 3 should use `measure_ids` to resolve package references against facility measures.
 - Verification: `bundle exec rspec spec/tests/unit/buildingsync_reader_spec.rb` - 22 examples, 0 failures.
@@ -327,7 +327,7 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 ### PR 3: Measure Index
 
 - Status: Done
-- Delivered by: Current PR #5 branch
+- Delivered by: PR #8, merged into `scenario-workflow` via PR #5
 - Handoff: `BOSS::BuildingSyncReader#get_measures` returns first-facility measures as a hash keyed by `Measure/@ID`. Values include `measure_id`, `system_category_affected`, `technology_category_element_name`, `measure_name`, `custom_measure_name`, `linked_premises_idrefs`, useful cost/savings fields, and `implementation_status`.
 - Handoff: Missing optional fields return `nil` or `[]`. Missing `Measures` returns `{}`. Measures without `TechnologyCategories` remain parseable.
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/buildingsync_reader_spec.rb` - 29 examples, 0 failures.
@@ -337,7 +337,7 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 ### PR 4: Parser Warning Contract
 
 - Status: Done
-- Delivered by: Current PR #5 branch
+- Delivered by: PR #9, merged into `scenario-workflow` via PR #5
 - Handoff: `BOSS::BuildingSyncReader#get_parser_warnings` returns symbol-keyed warning hashes with `code`, `severity`, `message`, and relevant scenario/package/measure context. Existing scenario and measure reader return shapes remain unchanged.
 - Handoff: Warning codes cover missing scenario/package/measure IDs, missing `MeasureID` references, unresolved measure references, packages without `MeasureID` references, packages with no parser-usable measures, and resolved measures missing `SystemCategoryAffected`, technology category, or `MeasureName`.
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/buildingsync_reader_spec.rb` - 33 examples, 0 failures.
@@ -347,13 +347,28 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 ### PR 5: Initial Mapping JSON
 
 - Status: Done
-- Delivered by: PR #10 branch
+- Delivered by: PR #10, merged into `scenario-workflow` via PR #5
 - Handoff: `lib/BOSS/scenario_measure_map.json` maps 12 `building_151.xml` category/name pairs to OSW-shaped steps with `measure_dir_name` and an argument hash that includes `__SKIP__`. Source strings match reader output exactly.
 - Handoff: Roof and wall absolute insulation targets use `buildingsync-measures-gem` `modify_envelope_insulation` with SI R-values (R-30 IP = 5.28, R-25 IP = 4.40 m²K/W). Other mappings use `openstudio-ee` or `openstudio-common-measures`. Relative mappings such as air sealing, ceiling insulation by percentage, and thermal bypasses stay on relative measures.
 - Deferred: Daylight controls, package unit replacement, burner replacement, and boiler replacement. The `buildingsync-measures-gem` split HVAC measures (`modify_existing_hvac_equipment_efficiencies`, `modify_existing_plant_equipment`, `hvac_packaged_rooftop_*`) need exact model object or zone names. Map them in PR 8 with context rules after `buildingsync-measures-gem` PR #3 merges.
 - Verification: JSON parse passed; every mapped measure directory and argument was checked against installed `BOSS.gemspec` gems and `buildingsync-measures-gem` `develop`.
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_map_spec.rb`.
 - Follow-up: PR 6 adds `BOSS::ScenarioMeasureMapper`. PR 12 must put `buildingsync-measures-gem` on OSW `measure_paths`.
+
+### PR 6: Basic `ScenarioMeasureMapper`
+
+- Status: Done
+- Delivered by: `scenario-workflow-6-basic-measure-mapper` branch
+- Handoff: `BOSS::ScenarioMeasureMapper.new(map_path = SCENARIO_MEASURE_MAP_PATH)` loads the JSON once with symbol keys. `SCENARIO_MEASURE_MAP_PATH` lives in `lib/BOSS/constants.rb`. A missing file, invalid JSON, or a missing `mappings` array raises `ArgumentError`.
+- Handoff: `#map_measure(measure)` takes one value from `BuildingSyncReader#get_measures` and returns `{ measure_id:, steps:, warnings: }`. Each step is a deep copy shaped `{ measure_dir_name:, arguments: { __SKIP__: false, ... } }`, in JSON order. Callers may mutate returned steps safely.
+- Handoff: Lookup key is `[system_category_affected, measure_name]`, normalized with strip, squeeze spaces, and downcase. On duplicate JSON keys the first entry wins.
+- Handoff: Unmapped measures never raise. They return `steps: []` and one warning shaped like reader warnings: `code`, `severity: :warning`, `message`, `measure_id`, `system_category_affected`, `measure_name`. Codes are `:measure_lookup_key_incomplete` (blank category or name) and `:unmapped_measure` (no JSON entry). Each warning is also logged via `BOSS.BOSS_logger.warn`.
+- Handoff: On `building_151.xml`, 12 of 16 measures map. Measure4, Measure5, Measure6, and Measure18 return `:unmapped_measure`, matching the PR 5 deferrals.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_mapper_spec.rb` - 11 examples, 0 failures.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit` - 78 examples, 0 failures, no constant redefinition warnings.
+- Verification: `bundle exec rubocop` on the changed files reports only `Layout/EndOfLine` on Windows working copies; git normalizes line endings on commit.
+- Follow-up: PR 7 should handle blank `system_category_affected` by falling back to `technology_category_element_name`, which narrows `:measure_lookup_key_incomplete` to blank `measure_name` only.
+- Follow-up for PR 12/13: `OpenStudio::Extension.set_measure_argument` matches every step with the same `measure_dir_name` unless `step_name` is passed. `SetLightingLoadsByLPD` is both a baseline step and the LED mapping target. Append mapped steps with their arguments already set, or pass a unique `step_name`, so baseline step arguments are not overwritten.
 
 ## Verification Commands
 
