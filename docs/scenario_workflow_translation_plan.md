@@ -99,8 +99,9 @@ lib/BOSS/scenario_measure_map.json
 
 Lookup order:
 
-1. `SystemCategoryAffected` plus `MeasureName`.
-2. Technology category element plus `MeasureName`, when `SystemCategoryAffected` is missing or not useful.
+1. Technology category element plus `MeasureName`.
+2. `SystemCategoryAffected` plus `MeasureName`, when the technology category is blank, matches no mapping, or matches mappings with different steps.
+3. Otherwise the measure is unmapped and reported as a warning. BOSS does not map by `MeasureName` alone or guess between mappings with different steps.
 
 The legacy `../BuildingSync-gem` mapping can be used as background, but do not copy it directly.
 
@@ -195,13 +196,13 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 - Done when: Unit tests return expected steps and structured unmapped warnings.
 - Avoid: Mutating reader data, raising on unmapped measures, or hardcoding mapping rules outside JSON.
 
-### PR 7: Technology Category Fallback
+### PR 7: Technology Category Lookup
 
-- Status: Planned
-- Delivered by: -
-- Scope: Add fallback lookup by technology category plus `MeasureName`.
-- Done when: Tests prove fallback works when `SystemCategoryAffected` is missing and normal lookup priority still wins.
-- Avoid: Changing normal category/name lookup behavior.
+- Status: Done
+- Delivered by: `scenario-workflow-7-technology-category-fallback` branch
+- Scope: Look up mappings by technology category plus `MeasureName` first, then fall back to `SystemCategoryAffected` plus `MeasureName`.
+- Done when: Tests prove technology category lookup wins, `SystemCategoryAffected` fallback works when the technology category is blank, unmatched, or ambiguous, and unresolved measures warn instead of guessing.
+- Avoid: Changing mapped results for `building_151.xml` measures, mapping by `MeasureName` alone, or guessing between mappings with different steps.
 
 ### PR 8: Conditional Mapping Rules
 
@@ -367,8 +368,23 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_mapper_spec.rb` - 11 examples, 0 failures.
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit` - 78 examples, 0 failures, no constant redefinition warnings.
 - Verification: `bundle exec rubocop` on the changed files reports only `Layout/EndOfLine` on Windows working copies; git normalizes line endings on commit.
-- Follow-up: PR 7 should handle blank `system_category_affected` by falling back to `technology_category_element_name`, which narrows `:measure_lookup_key_incomplete` to blank `measure_name` only.
+- Follow-up: PR 7 should handle blank `system_category_affected` by falling back to `technology_category_element_name`, which narrows `:measure_lookup_key_incomplete` to blank `measure_name` only. Superseded: PR 7 made technology category the primary lookup instead.
 - Follow-up for PR 12/13: `OpenStudio::Extension.set_measure_argument` matches every step with the same `measure_dir_name` unless `step_name` is passed. `SetLightingLoadsByLPD` is both a baseline step and the LED mapping target. Append mapped steps with their arguments already set, or pass a unique `step_name`, so baseline step arguments are not overwritten.
+
+### PR 7: Technology Category Lookup
+
+- Status: Done
+- Delivered by: `scenario-workflow-7-technology-category-fallback` branch
+- Handoff: `#map_measure` looks up `[technology_category_element_name, measure_name]` first. If that key is blank, has no JSON entry, or matches entries with different steps, it looks up `[system_category_affected, measure_name]`. Otherwise the measure is unmapped. Both keys use the PR 6 normalization, and BOSS never maps by `measure_name` alone.
+- Handoff: Technology category matches with identical steps collapse to one mapping. If the technology category match is ambiguous and `SystemCategoryAffected` does not resolve it, the result is `steps: []` with `:ambiguous_technology_category_mapping`. Other misses return `:unmapped_measure`. A future window-specific air sealing entry would share `BuildingEnvelopeModifications` + `Air seal envelope` with the wall entry, so `SystemCategoryAffected` would choose between them.
+- Handoff: `:measure_lookup_key_incomplete` means blank `measure_name`, or both `technology_category_element_name` and `system_category_affected` blank. Mapper warnings and log lines also include `technology_category_element_name`.
+- Handoff: `scenario_measure_map.json` `lookup_order` is `technology_category_element_name_and_measure_name`, then `system_category_affected_and_measure_name`. It documents the order; the mapper does not read it. Every entry must have a non-empty `technology_category_element_name`, and the 12 current values were checked against `../schema/BuildingSync.xsd` and `building_151.xml` reader output. `building_151.xml` still maps 12 of 16 measures with the same steps as PR 6.
+- Handoff: Fixture outcomes: `179D_Example_Building.xml` has no `SystemCategoryAffected`; technology category lookup maps its air sealing and LED measures, and its two `ServiceHotWaterSystems` measures stay unmapped. `Fenestration` + `Air seal envelope` in `Example_ASHRAE_L2_Report_-_with_Energy_Use_Data.xml` is a window air sealing upgrade and maps through `BuildingEnvelopeModifications` to the whole-building `ReduceSpaceInfiltrationByPercentage` step. `Upgrade operating protocols, calibration, and/or sequencing` in `Example_HOMES_Template_Building.xml` with `Other HVAC`/`BuildingAutomationSystems` or `Domestic Hot Water`/`WaterAndSewerConservationSystems` matches neither key, so both stay `:unmapped_measure`.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_mapper_spec.rb spec/tests/unit/scenario_measure_map_spec.rb` - 21 examples, 0 failures.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit` - 83 examples, 0 failures.
+- Verification: `bundle exec rubocop` on the changed Ruby files reports only `Layout/EndOfLine` on the Windows working copy of `scenario_measure_mapper_spec.rb`.
+- Follow-up: PR 8 conditional rules must keep the technology-category-first lookup. Entries that share a technology category and `MeasureName` with different steps are allowed, but each needs a distinct `SystemCategoryAffected` so the fallback can choose one.
+- Follow-up: PR 17 already has lookup priority, fallback, and ambiguity coverage from PR 7; extend it only for gaps PR 8 introduces.
 
 ## Verification Commands
 

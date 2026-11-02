@@ -17,10 +17,23 @@ RSpec.describe 'ScenarioMeasureMapper' do
     File.expand_path(File.join('../../files', *parts), __dir__)
   end
 
-  def building_151_measures
-    xml_path = mapper_fixture_path('v2.7.0', 'building_151.xml')
+  def fixture_measures(file_name)
+    xml_path = mapper_fixture_path('v2.7.0', file_name)
     doc = REXML::Document.new(File.read(xml_path), ignore_whitespace_nodes: :all)
     BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1).get_measures
+  end
+
+  def building_151_measures
+    fixture_measures('building_151.xml')
+  end
+
+  def single_step_mapping(system_category_affected, technology_category_element_name, measure_name, measure_dir_name)
+    {
+      system_category_affected:,
+      technology_category_element_name:,
+      measure_name:,
+      steps: [{ measure_dir_name:, arguments: { __SKIP__: false } }]
+    }
   end
 
   def with_map_file(content)
@@ -98,6 +111,7 @@ RSpec.describe 'ScenarioMeasureMapper' do
         message: 'Measure has no OpenStudio mapping.',
         measure_id: 'Measure18',
         system_category_affected: 'Heating System',
+        technology_category_element_name: 'BoilerPlantImprovements',
         measure_name: 'Replace boiler'
       )
     end
@@ -117,23 +131,152 @@ RSpec.describe 'ScenarioMeasureMapper' do
       expect(result[:warnings]).to eq []
     end
 
-    it 'warn without raising when MeasureName is missing' do
-      # Action
-      result = mapper.map_measure(lighting_measure(measure_name: nil))
+    it 'warn without raising when MeasureName or both categories are missing' do
+      # Set Up
+      incomplete_measures = [
+        lighting_measure(measure_name: nil),
+        lighting_measure(system_category_affected: nil, measure_name: ' '),
+        lighting_measure(system_category_affected: '  ', technology_category_element_name: nil)
+      ]
 
-      # Assert
-      expect(result[:steps]).to eq []
-      expect(result[:warnings].map { |warning| warning[:code] }).to eq [:measure_lookup_key_incomplete]
-      expect(result[:warnings].first).to include(measure_id: 'Measure1', severity: :warning, measure_name: nil)
+      incomplete_measures.each do |measure|
+        # Action
+        result = mapper.map_measure(measure)
+
+        # Assert
+        expect(result[:steps]).to eq []
+        expect(result[:warnings].map { |warning| warning[:code] }).to eq [:measure_lookup_key_incomplete]
+        expect(result[:warnings].first).to include(measure.merge(severity: :warning))
+      end
     end
 
-    it 'warn without raising when SystemCategoryAffected is missing' do
+    it 'map by technology category plus MeasureName when SystemCategoryAffected is missing' do
+      # Set Up
+      expected_steps = mapper.map_measure(lighting_measure)[:steps]
+      technology_category_measures = [nil, '', '  '].map { |blank_category| lighting_measure(system_category_affected: blank_category) }
+      technology_category_measures << lighting_measure(
+        system_category_affected: nil,
+        technology_category_element_name: ' lightingimprovements ',
+        measure_name: 'Retrofit with  light emitting diode technologies'
+      )
+
+      technology_category_measures.each do |measure|
+        # Action and Assert
+        expect(mapper.map_measure(measure)).to eq(measure_id: 'Measure1', steps: expected_steps, warnings: [])
+      end
+    end
+
+    it 'map building_151 measures the same way by either category lookup' do
+      building_151_measures.each_value do |measure|
+        # Action
+        full_result = mapper.map_measure(measure)
+        category_only_results = [
+          mapper.map_measure(measure.merge(system_category_affected: nil)),
+          mapper.map_measure(measure.merge(technology_category_element_name: nil)),
+          mapper.map_measure(measure.merge(technology_category_element_name: 'UnmappedTechnology'))
+        ]
+
+        # Assert
+        category_only_results.each do |result|
+          if full_result[:steps].any?
+            expect(result).to eq full_result
+          else
+            expect(result[:warnings].map { |warning| warning[:code] }).to eq [:unmapped_measure]
+          end
+        end
+      end
+    end
+
+    it 'map 179D_Example_Building measures that have no SystemCategoryAffected' do
+      # Set Up
+      measures = fixture_measures('179D_Example_Building.xml')
+      expect(measures.values.map { |measure| measure[:system_category_affected] }).to all(be_nil)
+
       # Action
-      result = mapper.map_measure(lighting_measure(system_category_affected: '  '))
+      results = measures.transform_values { |measure| mapper.map_measure(measure) }
 
       # Assert
-      expect(result[:steps]).to eq []
-      expect(result[:warnings].map { |warning| warning[:code] }).to eq [:measure_lookup_key_incomplete]
+      expect(results.fetch('MeasureType-45099320')[:steps]).to eq [
+        { measure_dir_name: 'ReduceSpaceInfiltrationByPercentage', arguments: { __SKIP__: false, space_infiltration_reduction_percent: 30.0 } }
+      ]
+      expect(results.fetch('MeasureType-45099340')[:steps]).to eq [
+        { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 0.6 } }
+      ]
+      ['MeasureType-45099360', 'MeasureType-45099380'].each do |measure_id|
+        expect(results.fetch(measure_id)[:steps]).to eq []
+        expect(results.fetch(measure_id)[:warnings].first).to include(code: :unmapped_measure, technology_category_element_name: 'ServiceHotWaterSystems')
+      end
+    end
+
+    it 'prefer technology category lookup over SystemCategoryAffected lookup' do
+      # Set Up
+      map_json = JSON.generate(
+        mappings: [
+          single_step_mapping('Lighting', 'OtherTechnology', 'Shared measure', 'SystemCategoryMatch'),
+          single_step_mapping('Other System', 'LightingImprovements', 'Shared measure', 'TechnologyCategoryMatch')
+        ]
+      )
+
+      with_map_file(map_json) do |map_path|
+        # Action
+        result = BOSS::ScenarioMeasureMapper.new(map_path).map_measure(lighting_measure(measure_name: 'Shared measure'))
+
+        # Assert
+        expect(result[:steps].map { |step| step[:measure_dir_name] }).to eq ['TechnologyCategoryMatch']
+        expect(result[:warnings]).to eq []
+      end
+    end
+
+    it 'map Fenestration air sealing by technology category and leave cross-category protocol measures unmapped' do
+      # Set Up
+      fenestration_measure = fixture_measures('Example_ASHRAE_L2_Report_-_with_Energy_Use_Data.xml').fetch('MeasureType-45035260')
+      expect(fenestration_measure).to include(system_category_affected: 'Fenestration', technology_category_element_name: 'BuildingEnvelopeModifications')
+      homes_measures = fixture_measures('Example_HOMES_Template_Building.xml')
+      protocol_measures = homes_measures.values_at('MeasureType-45139460', 'MeasureType-45139560')
+      expect(protocol_measures.map { |measure| measure[:system_category_affected] }).to eq ['Other HVAC', 'Domestic Hot Water']
+      expect(protocol_measures.map { |measure| measure[:technology_category_element_name] }).to eq ['BuildingAutomationSystems', 'WaterAndSewerConservationSystems']
+
+      # Action
+      fenestration_result = mapper.map_measure(fenestration_measure)
+      protocol_results = protocol_measures.map { |measure| mapper.map_measure(measure) }
+
+      # Assert
+      expect(fenestration_result[:steps]).to eq mapper.map_measure(building_151_measures.fetch('Measure3'))[:steps]
+      expect(fenestration_result[:warnings]).to eq []
+      protocol_results.each do |result|
+        expect(result[:steps]).to eq []
+        expect(result[:warnings].map { |warning| warning[:code] }).to eq [:unmapped_measure]
+      end
+    end
+
+    it 'fall back to SystemCategoryAffected when the technology category lookup is ambiguous' do
+      # Set Up
+      map_json = JSON.generate(
+        mappings: [
+          single_step_mapping('Wall', 'BuildingEnvelopeModifications', 'Air seal envelope', 'WallAirSeal'),
+          single_step_mapping('Roof', 'BuildingEnvelopeModifications', 'Air seal envelope', 'RoofAirSeal'),
+          single_step_mapping('Wall', 'BuildingEnvelopeModifications', 'Shared steps', 'SameStep'),
+          single_step_mapping('Roof', 'BuildingEnvelopeModifications', 'Shared steps', 'SameStep')
+        ]
+      )
+      envelope_measure = { measure_id: 'Measure3', technology_category_element_name: 'BuildingEnvelopeModifications', measure_name: 'Air seal envelope' }
+
+      with_map_file(map_json) do |map_path|
+        map_path_mapper = BOSS::ScenarioMeasureMapper.new(map_path)
+
+        # Action
+        ambiguous_results = [nil, 'Fenestration'].map { |category| map_path_mapper.map_measure(envelope_measure.merge(system_category_affected: category)) }
+        same_steps_result = map_path_mapper.map_measure(envelope_measure.merge(measure_name: 'Shared steps'))
+        categorized_result = map_path_mapper.map_measure(envelope_measure.merge(system_category_affected: 'Roof'))
+
+        # Assert
+        ambiguous_results.each do |result|
+          expect(result[:steps]).to eq []
+          expect(result[:warnings].map { |warning| warning[:code] }).to eq [:ambiguous_technology_category_mapping]
+        end
+        expect(same_steps_result).to include(steps: [{ measure_dir_name: 'SameStep', arguments: { __SKIP__: false } }], warnings: [])
+        expect(categorized_result[:steps].map { |step| step[:measure_dir_name] }).to eq ['RoofAirSeal']
+      end
     end
 
     it 'log a warning for unmapped measures' do
