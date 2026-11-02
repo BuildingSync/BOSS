@@ -206,9 +206,9 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 8: Conditional Mapping Rules
 
-- Status: Planned
-- Delivered by: -
-- Scope: Add data-driven conditional arguments for building type and principal HVAC/system context.
+- Status: In Progress
+- Delivered by: `scenario-workflow-8-conditional-mapping-rules` branch
+- Scope: Add data-driven conditional arguments for building type and principal HVAC/system context. Mapper engine and tests only; the PR 5 deferred production mappings are separate follow-up work.
 - Done when: Tests prove conditions include and exclude arguments predictably.
 - Avoid: Per-measure Ruby condition chains.
 
@@ -351,7 +351,7 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Delivered by: PR #10, merged into `scenario-workflow` via PR #5
 - Handoff: `lib/BOSS/scenario_measure_map.json` maps 12 `building_151.xml` category/name pairs to OSW-shaped steps with `measure_dir_name` and an argument hash that includes `__SKIP__`. Source strings match reader output exactly.
 - Handoff: Roof and wall absolute insulation targets use `buildingsync-measures-gem` `modify_envelope_insulation` with SI R-values (R-30 IP = 5.28, R-25 IP = 4.40 m²K/W). Other mappings use `openstudio-ee` or `openstudio-common-measures`. Relative mappings such as air sealing, ceiling insulation by percentage, and thermal bypasses stay on relative measures.
-- Deferred: Daylight controls, package unit replacement, burner replacement, and boiler replacement. The `buildingsync-measures-gem` split HVAC measures (`modify_existing_hvac_equipment_efficiencies`, `modify_existing_plant_equipment`, `hvac_packaged_rooftop_*`) need exact model object or zone names. Map them in PR 8 with context rules after `buildingsync-measures-gem` PR #3 merges.
+- Deferred: Daylight controls, package unit replacement, burner replacement, and boiler replacement. The `buildingsync-measures-gem` split HVAC measures (`modify_existing_hvac_equipment_efficiencies`, `modify_existing_plant_equipment`, `hvac_packaged_rooftop_*`) need exact model object or zone names. Map them in a follow-up after `buildingsync-measures-gem` PR #3 merges and exact target names can be supplied; PR 8 only adds the conditional-argument engine they may use.
 - Verification: JSON parse passed; every mapped measure directory and argument was checked against installed `BOSS.gemspec` gems and `buildingsync-measures-gem` `develop`.
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_map_spec.rb`.
 - Follow-up: PR 6 adds `BOSS::ScenarioMeasureMapper`. PR 12 must put `buildingsync-measures-gem` on OSW `measure_paths`.
@@ -385,6 +385,20 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Verification: `bundle exec rubocop` on the changed Ruby files reports only `Layout/EndOfLine` on the Windows working copy of `scenario_measure_mapper_spec.rb`.
 - Follow-up: PR 8 conditional rules must keep the technology-category-first lookup. Entries that share a technology category and `MeasureName` with different steps are allowed, but each needs a distinct `SystemCategoryAffected` so the fallback can choose one.
 - Follow-up: PR 17 already has lookup priority, fallback, and ambiguity coverage from PR 7; extend it only for gaps PR 8 introduces.
+
+### PR 8: Conditional Mapping Rules
+
+- Status: In Progress
+- Delivered by: `scenario-workflow-8-conditional-mapping-rules` branch
+- Handoff: `#map_measure(measure, context: {})` accepts `building_type` (first value of `BuildingSyncReader#get_building_type_and_bar_division_method`) and `hvac_system_type` (`#get_principal_HVAC_system_type`, the mapped OpenStudio name). The caller builds the context; the mapper does not read XML. `nil` context is empty; other non-Hash values raise `ArgumentError`. Extra keys are ignored. Return shape and warnings are unchanged.
+- Handoff: A step may have optional `conditional_arguments`, an ordered array of `{ "when": {...}, "arguments": {...} }`. `when` keys are `building_type` and `hvac_system_type`; each value is a non-blank string or non-empty string array. All keys must match (AND); any array value may match (OR); matching uses the lookup normalization. Missing, blank, or non-string context never matches and is not a warning.
+- Handoff: After PR 7 lookup selects a mapping, each step is deep-copied, `conditional_arguments` is removed, and every matching rule's arguments merge into the step arguments in JSON order. The last match wins; base arguments are defaults; unmatched conditional-only arguments are absent. Rule values must be strings, numbers, or booleans.
+- Handoff: Ambiguity checks compare full step definitions including `conditional_arguments`, so entries with equal defaults but different rules do not collapse. Context never resolves category ambiguity.
+- Handoff: Malformed rules raise `ArgumentError` at load with the `mappings[i].steps[j].conditional_arguments[k]` location. The shipped `scenario_measure_map.json` is unchanged and has no conditional rules yet.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_mapper_spec.rb spec/tests/unit/scenario_measure_map_spec.rb` - 29 examples, 0 failures.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit` - 91 examples, 0 failures.
+- Verification: `bundle exec rubocop` on the changed Ruby files reports only `Metrics/BlockLength` on the mapper spec's top-level `describe` block.
+- Follow-up: PR 11/12 should build the context from the reader once per file and pass it to `map_measure`.
 
 ## Verification Commands
 
