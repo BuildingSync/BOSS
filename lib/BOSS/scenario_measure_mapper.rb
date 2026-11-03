@@ -74,7 +74,80 @@ module BOSS
       }
     end
 
+    # Maps every MeasureID occurrence of one package scenario, in order. Repeated references
+    # are mapped once per occurrence. Parser warnings stay with BuildingSyncReader#get_parser_warnings.
+    #
+    # @param scenario [Hash] one record from BuildingSyncReader#get_package_measure_scenarios
+    # @param measures [Hash] BuildingSyncReader#get_measures, keyed by measure ID
+    # @param context [Hash, nil] forwarded to #map_measure
+    # @return [Hash] { scenario_id:, scenario_name:, report_id:, package_id:,
+    #   status: :writable | :skipped, steps: [], skipped_measure_ids: [], warnings: [] }
+    def map_package_scenario(scenario, measures, context: {})
+      context ||= {}
+      raise ArgumentError, 'scenario must be a Hash' if !scenario.is_a?(Hash)
+      raise ArgumentError, 'measures must be a Hash' if !measures.is_a?(Hash)
+      raise ArgumentError, 'context must be a Hash' if !context.is_a?(Hash)
+      raise ArgumentError, 'scenario must be a package_of_measures scenario' if scenario[:scenario_type] != :package_of_measures
+      raise ArgumentError, 'scenario measure_ids must be an Array' if !scenario[:measure_ids].is_a?(Array)
+
+      scenario_context = {
+        report_id: scenario[:report_id],
+        scenario_id: scenario[:scenario_id],
+        package_id: scenario[:package_id]
+      }
+      steps = []
+      skipped_measure_ids = []
+      warnings = []
+
+      scenario[:measure_ids].each do |measure_idref|
+        measure = _normalize(measure_idref).nil? ? nil : measures[measure_idref]
+        if measure.nil?
+          code, message = if _normalize(measure_idref).nil?
+                            [:missing_measure_idref, 'MeasureID is missing IDref.']
+                          else
+                            [:unresolved_measure_idref, 'Package references an unknown measure ID.']
+                          end
+          warnings << _scenario_warning(code, message, scenario_context.merge(measure_idref:))
+          skipped_measure_ids << measure_idref
+          next
+        end
+
+        result = map_measure(measure, context:)
+        steps.concat(result[:steps])
+        skipped_measure_ids << measure_idref if result[:steps].empty?
+        warnings.concat(result[:warnings].map { |warning| warning.merge(scenario_context) })
+      end
+
+      if steps.empty?
+        warnings << _scenario_warning(
+          :package_has_no_mapped_measures,
+          'Package scenario has no mapped OpenStudio steps; scenario workflow will be skipped.',
+          scenario_context
+        )
+      end
+
+      return _deep_copy(
+        scenario_id: scenario[:scenario_id],
+        scenario_name: scenario[:scenario_name],
+        report_id: scenario[:report_id],
+        package_id: scenario[:package_id],
+        status: steps.empty? ? :skipped : :writable,
+        steps:,
+        skipped_measure_ids:,
+        warnings:
+      )
+    end
+
     private
+
+    def _scenario_warning(code, message, context)
+      BOSS.BOSS_logger.warn(
+        "BOSS.ScenarioMeasureMapper: #{message} " \
+        "(#{context.map { |key, value| "#{key}: #{value.inspect}" }.join(', ')})"
+      )
+
+      return { code:, severity: :warning, message: }.merge(context)
+    end
 
     def _load_mappings(map_path)
       raise ArgumentError, "Scenario measure map '#{map_path}' does not exist" if !File.file?(map_path.to_s)
