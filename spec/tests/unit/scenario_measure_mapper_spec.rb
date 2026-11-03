@@ -330,7 +330,164 @@ RSpec.describe 'ScenarioMeasureMapper' do
     end
   end
 
+  describe 'map_measure with conditional_arguments should' do
+    def conditional_step(measure_dir_name, rules, arguments = { __SKIP__: false })
+      { measure_dir_name:, arguments:, conditional_arguments: rules }
+    end
+
+    def conditional_mapping(steps, system_category_affected: 'Lighting', technology_category_element_name: 'LightingImprovements')
+      {
+        system_category_affected:,
+        technology_category_element_name:,
+        measure_name: 'Conditional measure',
+        steps:
+      }
+    end
+
+    def conditional_mapper(mappings)
+      with_map_file(JSON.generate(mappings:)) { |map_path| yield BOSS::ScenarioMeasureMapper.new(map_path) }
+    end
+
+    let(:conditional_measure) { lighting_measure(measure_name: 'Conditional measure') }
+    let(:rules) do
+      [
+        { when: { building_type: ['SmallOffice', 'MediumOffice'] }, arguments: { space_type: 'Office' } },
+        { when: { building_type: 'SmallOffice', hvac_system_type: 'PSZ-HP' }, arguments: { space_type: 'Small HP office', heat_pump: true } },
+        { when: { hvac_system_type: 'PSZ-HP' }, arguments: { lpd: 0, enabled: false } }
+      ]
+    end
+
+    it 'include matching arguments and exclude non-matching ones' do
+      conditional_mapper([conditional_mapping([conditional_step('Conditional', rules, { __SKIP__: false, lpd: 0.6 })])]) do |map_mapper|
+        cases = {
+          nil => { __SKIP__: false, lpd: 0.6 },
+          { building_type: 'MediumOffice' } => { __SKIP__: false, lpd: 0.6, space_type: 'Office' },
+          { building_type: ' smalloffice ', hvac_system_type: 'psz-hp', extra: 'ignored' } =>
+            { __SKIP__: false, lpd: 0, space_type: 'Small HP office', heat_pump: true, enabled: false },
+          { building_type: 'SmallOffice', hvac_system_type: 'PSZ-AC with gas unit heaters' } =>
+            { __SKIP__: false, lpd: 0.6, space_type: 'Office' },
+          { building_type: 'RetailStandalone', hvac_system_type: 'PSZ-HP' } => { __SKIP__: false, lpd: 0, enabled: false },
+          { building_type: nil, hvac_system_type: '' } => { __SKIP__: false, lpd: 0.6 },
+          { building_type: :SmallOffice } => { __SKIP__: false, lpd: 0.6 }
+        }
+
+        cases.each do |context, expected_arguments|
+          result = map_mapper.map_measure(conditional_measure, context:)
+          expect(result).to eq(measure_id: 'Measure1', steps: [{ measure_dir_name: 'Conditional', arguments: expected_arguments }], warnings: [])
+        end
+        expect(map_mapper.map_measure(conditional_measure)[:steps].first[:arguments]).to eq(__SKIP__: false, lpd: 0.6)
+      end
+    end
+
+    it 'apply rules per step, keep step order, and drop metadata' do
+      steps = [
+        conditional_step('First', [{ when: { building_type: 'SmallOffice' }, arguments: { first: 1 } }]),
+        conditional_step('Second', []),
+        conditional_step('Third', [{ when: { building_type: 'LargeOffice' }, arguments: { third: 'x' } }])
+      ]
+
+      conditional_mapper([conditional_mapping(steps)]) do |map_mapper|
+        result = map_mapper.map_measure(conditional_measure, context: { building_type: 'SmallOffice' })
+
+        expect(result[:steps]).to eq [
+          { measure_dir_name: 'First', arguments: { __SKIP__: false, first: 1 } },
+          { measure_dir_name: 'Second', arguments: { __SKIP__: false } },
+          { measure_dir_name: 'Third', arguments: { __SKIP__: false } }
+        ]
+      end
+    end
+
+    it 'not mutate inputs or leak state between calls' do
+      conditional_mapper([conditional_mapping([conditional_step('Conditional', rules)])]) do |map_mapper|
+        context = { building_type: 'SmallOffice', hvac_system_type: 'PSZ-HP' }
+        context_before = Marshal.load(Marshal.dump(context))
+
+        first = map_mapper.map_measure(conditional_measure, context:)
+        first[:steps].first[:arguments][:space_type] << ' changed'
+        first[:steps].first[:arguments][:extra] = 1
+
+        expect(context).to eq context_before
+        expect(map_mapper.map_measure(conditional_measure, context:)[:steps].first[:arguments][:space_type]).to eq 'Small HP office'
+        expect(map_mapper.map_measure(conditional_measure, context: { building_type: 'LargeOffice' })[:steps].first[:arguments]).to eq(__SKIP__: false)
+      end
+    end
+
+    it 'raise ArgumentError when context is not a Hash' do
+      expect { mapper.map_measure(lighting_measure, context: 'SmallOffice') }.to raise_error(ArgumentError, /context must be a Hash/)
+    end
+
+    it 'treat mappings with the same defaults but different rules as different mappings' do
+      wall = conditional_mapping(
+        [conditional_step('Shared', [{ when: { building_type: 'SmallOffice' }, arguments: { wall: true } }])],
+        system_category_affected: 'Wall', technology_category_element_name: 'BuildingEnvelopeModifications'
+      )
+      roof = conditional_mapping(
+        [conditional_step('Shared', [{ when: { building_type: 'LargeOffice' }, arguments: { roof: true } }])],
+        system_category_affected: 'Roof', technology_category_element_name: 'BuildingEnvelopeModifications'
+      )
+      envelope_measure = { measure_id: 'M', technology_category_element_name: 'BuildingEnvelopeModifications', measure_name: 'Conditional measure' }
+
+      conditional_mapper([wall, roof, wall]) do |map_mapper|
+        ambiguous = map_mapper.map_measure(envelope_measure, context: { building_type: 'MediumOffice' })
+        resolved = map_mapper.map_measure(envelope_measure.merge(system_category_affected: 'Roof'), context: { building_type: 'LargeOffice' })
+
+        expect(ambiguous[:warnings].map { |warning| warning[:code] }).to eq [:ambiguous_technology_category_mapping]
+        expect(resolved[:steps]).to eq [{ measure_dir_name: 'Shared', arguments: { __SKIP__: false, roof: true } }]
+      end
+    end
+
+    it 'match context derived from the reader for example-smalloffice-level1' do
+      xml_path = mapper_fixture_path('v2.7.0', 'example-smalloffice-level1.xml')
+      doc = REXML::Document.new(File.read(xml_path), ignore_whitespace_nodes: :all)
+      reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      allow(BOSS.BOSS_logger).to receive(:info)
+      building_type, = reader.get_building_type_and_bar_division_method
+      context = { building_type:, hvac_system_type: reader.get_principal_HVAC_system_type }
+      expect(context).to eq(building_type: 'SmallOffice', hvac_system_type: 'PSZ-HP')
+
+      conditional_mapper([conditional_mapping([conditional_step('Conditional', rules)])]) do |map_mapper|
+        expect(map_mapper.map_measure(conditional_measure, context:)[:steps].first[:arguments])
+          .to eq(__SKIP__: false, space_type: 'Small HP office', heat_pump: true, lpd: 0, enabled: false)
+      end
+    end
+
+    it 'keep building_151 results unchanged when context is supplied' do
+      context = { building_type: 'RetailStandalone', hvac_system_type: 'VAV chiller with gas boiler reheat' }
+      building_151_measures.each_value do |measure|
+        expect(mapper.map_measure(measure, context:)).to eq mapper.map_measure(measure)
+      end
+    end
+  end
+
   describe 'initialize should' do
+    it 'raise ArgumentError for malformed conditional_arguments' do
+      invalid_rule_sets = {
+        nil => /must be an array/,
+        'rule' => /must be an array/,
+        ['rule'] => /\[0\] must be an object/,
+        [{ when: { building_type: 'A' }, arguments: { a: 1 }, unless: {} }] => /unknown keys/,
+        [{ arguments: { a: 1 } }] => /when must be a non-empty object/,
+        [{ when: {}, arguments: { a: 1 } }] => /when must be a non-empty object/,
+        [{ when: { occupancy: 'Office' }, arguments: { a: 1 } }] => /unknown key 'occupancy'/,
+        [{ when: { building_type: ' ' }, arguments: { a: 1 } }] => /when.building_type must be/,
+        [{ when: { building_type: [] }, arguments: { a: 1 } }] => /when.building_type must be/,
+        [{ when: { hvac_system_type: [1] }, arguments: { a: 1 } }] => /when.hvac_system_type must be/,
+        [{ when: { building_type: 'A' } }] => /arguments must be a non-empty object/,
+        [{ when: { building_type: 'A' }, arguments: {} }] => /arguments must be a non-empty object/,
+        [{ when: { building_type: 'A' }, arguments: { a: nil } }] => /arguments.a must be a string, number, or boolean/,
+        [{ when: { building_type: 'A' }, arguments: { a: [1] } }] => /arguments.a must be a string, number, or boolean/
+      }
+
+      invalid_rule_sets.each do |rule_set, message|
+        mapping = single_step_mapping('Lighting', 'LightingImprovements', 'Bad', 'Bad')
+        mapping[:steps].first[:conditional_arguments] = rule_set
+        with_map_file(JSON.generate(mappings: [mapping])) do |map_path|
+          expect { BOSS::ScenarioMeasureMapper.new(map_path) }
+            .to raise_error(ArgumentError, /mappings\[0\]\.steps\[0\]\.conditional_arguments.*#{message.source}/)
+        end
+      end
+    end
+
     it 'raise ArgumentError when the map file does not exist' do
       expect { BOSS::ScenarioMeasureMapper.new(mapper_fixture_path('missing_map.json')) }
         .to raise_error(ArgumentError, /does not exist/)

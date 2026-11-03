@@ -17,7 +17,14 @@ module BOSS
   # Lookup tries the technology category element name plus MeasureName first. When that is
   # blank, unmatched, or matches mappings with different steps, it tries SystemCategoryAffected
   # plus MeasureName. Otherwise the measure is unmapped.
+  #
+  # A step may carry conditional_arguments: an ordered list of { when:, arguments: } rules.
+  # A rule applies when every `when` key matches the caller's context; matching rules merge
+  # into the step arguments in order, so the last match wins.
   class ScenarioMeasureMapper
+    CONDITION_KEYS = [:building_type, :hvac_system_type].freeze
+    RULE_KEYS = [:when, :arguments].freeze
+
     def initialize(map_path = SCENARIO_MEASURE_MAP_PATH)
       @map_path = map_path
       mappings = _load_mappings(map_path)
@@ -26,8 +33,12 @@ module BOSS
     end
 
     # @param measure [Hash] symbol-keyed measure hash from the reader
+    # @param context [Hash, nil] { building_type:, hvac_system_type: } used by conditional_arguments
     # @return [Hash] { measure_id:, steps: [ { measure_dir_name:, arguments: {} } ], warnings: [] }
-    def map_measure(measure)
+    def map_measure(measure, context: {})
+      context ||= {}
+      raise ArgumentError, 'context must be a Hash' if !context.is_a?(Hash)
+
       technology_category_key = _lookup_key(measure[:technology_category_element_name], measure[:measure_name])
       system_category_key = _lookup_key(measure[:system_category_affected], measure[:measure_name])
 
@@ -58,7 +69,7 @@ module BOSS
 
       return {
         measure_id: measure[:measure_id],
-        steps: _deep_copy(mapping[:steps]),
+        steps: mapping[:steps].map { |step| _effective_step(step, context) },
         warnings: []
       }
     end
@@ -77,7 +88,73 @@ module BOSS
       mappings = map.is_a?(Hash) ? map[:mappings] : nil
       raise ArgumentError, "Scenario measure map '#{map_path}' must define a 'mappings' array" if !mappings.is_a?(Array)
 
+      mappings.each_with_index do |mapping, mapping_index|
+        Array(mapping.is_a?(Hash) ? mapping[:steps] : nil).each_with_index do |step, step_index|
+          next if !step.is_a?(Hash) || !step.key?(:conditional_arguments)
+
+          location = "Scenario measure map '#{map_path}' mappings[#{mapping_index}].steps[#{step_index}].conditional_arguments"
+          _validate_conditional_arguments(step[:conditional_arguments], location)
+        end
+      end
+
       return mappings
+    end
+
+    def _validate_conditional_arguments(rules, location)
+      raise ArgumentError, "#{location} must be an array" if !rules.is_a?(Array)
+
+      rules.each_with_index do |rule, rule_index|
+        rule_location = "#{location}[#{rule_index}]"
+        raise ArgumentError, "#{rule_location} must be an object" if !rule.is_a?(Hash)
+
+        unknown_keys = rule.keys - RULE_KEYS
+        raise ArgumentError, "#{rule_location} has unknown keys #{unknown_keys.inspect}" if unknown_keys.any?
+
+        predicates = rule[:when]
+        if !predicates.is_a?(Hash) || predicates.empty?
+          raise ArgumentError, "#{rule_location}.when must be a non-empty object"
+        end
+
+        predicates.each do |key, value|
+          raise ArgumentError, "#{rule_location}.when has unknown key '#{key}'" if !CONDITION_KEYS.include?(key)
+
+          candidates = value.is_a?(Array) ? value : [value]
+          if candidates.empty? || candidates.any? { |candidate| !candidate.is_a?(String) || _normalize(candidate).nil? }
+            raise ArgumentError, "#{rule_location}.when.#{key} must be a non-blank string or non-empty array of them"
+          end
+        end
+
+        arguments = rule[:arguments]
+        if !arguments.is_a?(Hash) || arguments.empty?
+          raise ArgumentError, "#{rule_location}.arguments must be a non-empty object"
+        end
+
+        arguments.each do |name, value|
+          raise ArgumentError, "#{rule_location}.arguments has a blank name" if _normalize(name).nil?
+          if [String, Numeric, TrueClass, FalseClass].none? { |type| value.is_a?(type) }
+            raise ArgumentError, "#{rule_location}.arguments.#{name} must be a string, number, or boolean"
+          end
+        end
+      end
+    end
+
+    def _effective_step(step, context)
+      effective_step = _deep_copy(step)
+      rules = effective_step.delete(:conditional_arguments) || []
+      rules.each do |rule|
+        (effective_step[:arguments] ||= {}).merge!(rule[:arguments]) if _rule_matches?(rule, context)
+      end
+
+      return effective_step
+    end
+
+    def _rule_matches?(rule, context)
+      return rule[:when].all? do |key, expected|
+        actual = context[key]
+        next false if !actual.is_a?(String) || _normalize(actual).nil?
+
+        Array(expected).any? { |candidate| _normalize(candidate) == _normalize(actual) }
+      end
     end
 
     # Groups mappings by [category, MeasureName] in JSON order. Entries with identical steps
