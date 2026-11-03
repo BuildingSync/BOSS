@@ -240,9 +240,10 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 - Status: Planned
 - Delivered by: -
-- Scope: Deep-copy baseline OSW and append mapped retrofit steps in deterministic order. Make sure `buildingsync-measures-gem` measures are on the OSW `measure_paths`; `develop` already provides `config/external_measure_repos.yml` for this.
-- Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments, and every mapped `measure_dir_name` resolves from the OSW `measure_paths`. A test covers the LED mapping, whose `SetLightingLoadsByLPD` step also exists in the baseline, and proves the baseline step's arguments are unchanged.
-- Avoid: Mutating the baseline OSW, omitting baseline creation steps, or using nondeterministic step order.
+- Scope: Deep-copy baseline OSW and append mapped retrofit steps in a practical OpenStudio construction order, not BuildingSync `MeasureID` order. Make sure `buildingsync-measures-gem` measures are on the OSW `measure_paths`; `develop` already provides `config/external_measure_repos.yml` for this.
+- Ordering: Keep the order data-driven. For example, give each mapping step a `workflow_phase` in `scenario_measure_map.json` (envelope, then internal loads, then HVAC equipment, then controls and operations) and stable-sort mapped steps by phase, breaking ties by reference order. OpenStudio already runs model measures before EnergyPlus and reporting measures, so phases only order model measures.
+- Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments, and every mapped `measure_dir_name` resolves from the OSW `measure_paths`. A multi-measure package listed out of phase order produces phase-ordered steps. A test covers the LED mapping, whose `SetLightingLoadsByLPD` step also exists in the baseline, and proves the baseline step's arguments are unchanged.
+- Avoid: Mutating the baseline OSW, omitting baseline creation steps, nondeterministic step order, or hardcoding phase order in Ruby per measure.
 
 ### PR 13: Generic OSW Step Helpers
 
@@ -405,7 +406,7 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Status: In Progress
 - Delivered by: `scenario-workflow-9-structured-mapping-results` branch
 - Handoff: `#map_package_scenario(scenario, measures, context: {})` takes one record from `get_package_measure_scenarios` and the `get_measures` index. It returns `scenario_id`, `scenario_name`, `report_id`, `package_id`, `status`, `steps`, `skipped_measure_ids`, and `warnings`. `status` is `:writable` when `steps` is non-empty, otherwise `:skipped`.
-- Handoff: Every `MeasureID` occurrence is processed in order. Repeated references produce repeated steps, skipped IDs, and warnings. `steps` is flat, in reference order then mapping step order. `context` is forwarded to `map_measure` for each occurrence.
+- Handoff: Every `MeasureID` occurrence is processed in order. Repeated references produce repeated steps, skipped IDs, and warnings. `steps` is flat, in reference order then mapping step order. This order is provisional: PR 12 reorders steps by workflow phase. Do not treat `steps` order as the final OSW order. `context` is forwarded to `map_measure` for each occurrence.
 - Handoff: Blank refs warn `:missing_measure_idref`; unknown refs warn `:unresolved_measure_idref` with `measure_idref`. Mapper warnings from `map_measure` are kept and get `report_id`, `scenario_id`, and `package_id`. Skipped scenarios end with one `:package_has_no_mapped_measures` warning. Each warning is logged once.
 - Handoff: Parser warnings stay in `get_parser_warnings`. Callers that combine both streams should expect overlap for blank and unresolved refs.
 - Handoff: Non-Hash `scenario`, `measures`, or `context`, a non-package `scenario_type`, or non-Array `measure_ids` raise `ArgumentError`. Results are deep copies; inputs are not mutated.

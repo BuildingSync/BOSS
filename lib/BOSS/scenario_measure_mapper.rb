@@ -75,7 +75,8 @@ module BOSS
     end
 
     # Maps every MeasureID occurrence of one package scenario, in order. Repeated references
-    # are mapped once per occurrence. Parser warnings stay with BuildingSyncReader#get_parser_warnings.
+    # are mapped once per occurrence. Step order follows the references and is not the final OSW order.
+    # Parser warnings stay with BuildingSyncReader#get_parser_warnings.
     #
     # @param scenario [Hash] one record from BuildingSyncReader#get_package_measure_scenarios
     # @param measures [Hash] BuildingSyncReader#get_measures, keyed by measure ID
