@@ -206,16 +206,16 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 8: Conditional Mapping Rules
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-8-conditional-mapping-rules` branch
+- Status: Done
+- Delivered by: PR #16, merged into `scenario-workflow`
 - Scope: Add data-driven conditional arguments for building type and principal HVAC/system context. Mapper engine and tests only; the PR 5 deferred production mappings are separate follow-up work.
 - Done when: Tests prove conditions include and exclude arguments predictably.
 - Avoid: Per-measure Ruby condition chains.
 
 ### PR 9: Structured Mapping Results
 
-- Status: Planned
-- Delivered by: -
+- Status: In Progress
+- Delivered by: `scenario-workflow-9-structured-mapping-results` branch
 - Scope: Return mapped steps, skipped measure IDs, warnings, and scenario write/skip status.
 - Done when: Scenarios with mapped measures are writable and zero-mapped scenarios are skipped with clear warnings.
 - Avoid: Requiring callers to infer status from logs or empty arrays.
@@ -240,9 +240,10 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 - Status: Planned
 - Delivered by: -
-- Scope: Deep-copy baseline OSW and append mapped retrofit steps in deterministic order. Make sure `buildingsync-measures-gem` measures are on the OSW `measure_paths`; `develop` already provides `config/external_measure_repos.yml` for this.
-- Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments, and every mapped `measure_dir_name` resolves from the OSW `measure_paths`. A test covers the LED mapping, whose `SetLightingLoadsByLPD` step also exists in the baseline, and proves the baseline step's arguments are unchanged.
-- Avoid: Mutating the baseline OSW, omitting baseline creation steps, or using nondeterministic step order.
+- Scope: Deep-copy baseline OSW and append mapped retrofit steps in a practical OpenStudio construction order, not BuildingSync `MeasureID` order. Make sure `buildingsync-measures-gem` measures are on the OSW `measure_paths`; `develop` already provides `config/external_measure_repos.yml` for this.
+- Ordering: Keep the order data-driven. For example, give each mapping step a `workflow_phase` in `scenario_measure_map.json` (envelope, then internal loads, then HVAC equipment, then controls and operations) and stable-sort mapped steps by phase, breaking ties by reference order. OpenStudio already runs model measures before EnergyPlus and reporting measures, so phases only order model measures.
+- Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments, and every mapped `measure_dir_name` resolves from the OSW `measure_paths`. A multi-measure package listed out of phase order produces phase-ordered steps. A test covers the LED mapping, whose `SetLightingLoadsByLPD` step also exists in the baseline, and proves the baseline step's arguments are unchanged.
+- Avoid: Mutating the baseline OSW, omitting baseline creation steps, nondeterministic step order, or hardcoding phase order in Ruby per measure.
 
 ### PR 13: Generic OSW Step Helpers
 
@@ -388,8 +389,8 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 
 ### PR 8: Conditional Mapping Rules
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-8-conditional-mapping-rules` branch
+- Status: Done
+- Delivered by: PR #16, merged into `scenario-workflow`
 - Handoff: `#map_measure(measure, context: {})` accepts `building_type` (first value of `BuildingSyncReader#get_building_type_and_bar_division_method`) and `hvac_system_type` (`#get_principal_HVAC_system_type`, the mapped OpenStudio name). The caller builds the context; the mapper does not read XML. `nil` context is empty; other non-Hash values raise `ArgumentError`. Extra keys are ignored. Return shape and warnings are unchanged.
 - Handoff: A step may have optional `conditional_arguments`, an ordered array of `{ "when": {...}, "arguments": {...} }`. `when` keys are `building_type` and `hvac_system_type`; each value is a non-blank string or non-empty string array. All keys must match (AND); any array value may match (OR); matching uses the lookup normalization. Missing, blank, or non-string context never matches and is not a warning.
 - Handoff: After PR 7 lookup selects a mapping, each step is deep-copied, `conditional_arguments` is removed, and every matching rule's arguments merge into the step arguments in JSON order. The last match wins; base arguments are defaults; unmatched conditional-only arguments are absent. Rule values must be strings, numbers, or booleans.
@@ -399,6 +400,21 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit` - 91 examples, 0 failures.
 - Verification: `bundle exec rubocop` on the changed Ruby files reports only `Metrics/BlockLength` on the mapper spec's top-level `describe` block.
 - Follow-up: PR 11/12 should build the context from the reader once per file and pass it to `map_measure`.
+
+### PR 9: Structured Mapping Results
+
+- Status: In Progress
+- Delivered by: `scenario-workflow-9-structured-mapping-results` branch
+- Handoff: `#map_package_scenario(scenario, measures, context: {})` takes one record from `get_package_measure_scenarios` and the `get_measures` index. It returns `scenario_id`, `scenario_name`, `report_id`, `package_id`, `status`, `steps`, `skipped_measure_ids`, and `warnings`. `status` is `:writable` when `steps` is non-empty, otherwise `:skipped`.
+- Handoff: Every `MeasureID` occurrence is processed in order. Repeated references produce repeated steps, skipped IDs, and warnings. `steps` is flat, in reference order then mapping step order. This order is provisional: PR 12 reorders steps by workflow phase. Do not treat `steps` order as the final OSW order. `context` is forwarded to `map_measure` for each occurrence.
+- Handoff: Blank refs warn `:missing_measure_idref`; unknown refs warn `:unresolved_measure_idref` with `measure_idref`. Mapper warnings from `map_measure` are kept and get `report_id`, `scenario_id`, and `package_id`. Skipped scenarios end with one `:package_has_no_mapped_measures` warning. Each warning is logged once.
+- Handoff: Parser warnings stay in `get_parser_warnings`. Callers that combine both streams should expect overlap for blank and unresolved refs.
+- Handoff: Non-Hash `scenario`, `measures`, or `context`, a non-package `scenario_type`, or non-Array `measure_ids` raise `ArgumentError`. Results are deep copies; inputs are not mutated.
+- Handoff: `building_151.xml` gives 12 writable scenarios; Scenario4, Scenario5, Scenario6, and Scenario18 are skipped.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_mapper_spec.rb spec/tests/unit/scenario_measure_map_spec.rb` - 38 examples, 0 failures.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit` - 100 examples, 0 failures.
+- Verification: `bundle exec rubocop` on the changed Ruby files reports only the existing `Metrics/BlockLength` on the mapper spec's top-level `describe` block.
+- Follow-up: PR 11 should write OSWs only for `:writable` results and report `:skipped` results with their warnings.
 
 ## Verification Commands
 

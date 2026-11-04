@@ -459,6 +459,153 @@ RSpec.describe 'ScenarioMeasureMapper' do
     end
   end
 
+  describe 'map_package_scenario should' do
+    def fixture_reader(file_name)
+      doc = REXML::Document.new(File.read(mapper_fixture_path('v2.7.0', file_name)), ignore_whitespace_nodes: :all)
+      BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+    end
+
+    def package_scenario(measure_ids)
+      {
+        scenario_id: 'ScenarioA',
+        scenario_name: 'Package A',
+        report_id: 'ReportA',
+        scenario_type: :package_of_measures,
+        package_id: 'PackageA',
+        measure_ids:
+      }
+    end
+
+    let(:scenario_context) { { report_id: 'ReportA', scenario_id: 'ScenarioA', package_id: 'PackageA' } }
+    let(:led_step) { { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 0.6 } } }
+    let(:measures) do
+      {
+        'Mapped' => lighting_measure(measure_id: 'Mapped'),
+        'Unmapped' => lighting_measure(measure_id: 'Unmapped', measure_name: 'Not a mapped measure')
+      }
+    end
+
+    it 'mark building_151 scenarios writable or skipped' do
+      reader = fixture_reader('building_151.xml')
+      all_measures = reader.get_measures
+
+      results = reader.get_package_measure_scenarios.map { |scenario| mapper.map_package_scenario(scenario, all_measures) }
+
+      expect(results.length).to eq 16
+      skipped = results.select { |result| result[:status] == :skipped }
+      expect(skipped.map { |result| result[:scenario_id] }).to eq ['Scenario4', 'Scenario5', 'Scenario6', 'Scenario18']
+      expect(results.count { |result| result[:status] == :writable }).to eq 12
+      skipped.each do |result|
+        expect(result[:steps]).to eq []
+        expect(result[:skipped_measure_ids]).to eq [result[:scenario_id].sub('Scenario', 'Measure')]
+        expect(result[:warnings].map { |warning| warning[:code] }).to eq [:unmapped_measure, :package_has_no_mapped_measures]
+      end
+      expect(results.first).to eq(
+        scenario_id: 'Scenario1',
+        scenario_name: 'LED Only',
+        report_id: 'Report1',
+        package_id: 'PackageOfMeasures1',
+        status: :writable,
+        steps: [led_step],
+        skipped_measure_ids: [],
+        warnings: []
+      )
+    end
+
+    it 'stay writable with mixed results and report skipped references in order' do
+      result = mapper.map_package_scenario(package_scenario(['Unmapped', 'Mapped', 'Unknown', '']), measures)
+
+      expect(result).to include(status: :writable, steps: [led_step], skipped_measure_ids: ['Unmapped', 'Unknown', ''])
+      expect(result[:warnings].map { |warning| warning[:code] }).to eq [:unmapped_measure, :unresolved_measure_idref, :missing_measure_idref]
+      expect(result[:warnings]).to all(include(scenario_context.merge(severity: :warning)))
+      expect(result[:warnings][0]).to include(measure_id: 'Unmapped', measure_name: 'Not a mapped measure')
+      expect(result[:warnings][1]).to include(measure_idref: 'Unknown', message: 'Package references an unknown measure ID.')
+    end
+
+    it 'skip zero-mapped scenarios with a summary warning' do
+      [[], ['Unknown'], ['Unmapped']].each do |measure_ids|
+        result = mapper.map_package_scenario(package_scenario(measure_ids), measures)
+
+        expect(result).to include(status: :skipped, steps: [], skipped_measure_ids: measure_ids)
+        expect(result[:warnings].last).to eq(
+          code: :package_has_no_mapped_measures,
+          severity: :warning,
+          message: 'Package scenario has no mapped OpenStudio steps; scenario workflow will be skipped.',
+          **scenario_context
+        )
+      end
+    end
+
+    it 'skip Golden Test File scenarios with incomplete measure metadata' do
+      reader = fixture_reader('Golden Test File.xml')
+      results = reader.get_package_measure_scenarios.map { |scenario| mapper.map_package_scenario(scenario, reader.get_measures) }
+
+      expect(results).not_to be_empty
+      results.each do |result|
+        expect(result[:status]).to eq :skipped
+        expect(result[:warnings].map { |warning| warning[:code] }.uniq).to eq [:measure_lookup_key_incomplete, :package_has_no_mapped_measures]
+      end
+    end
+
+    it 'map every occurrence of repeated references' do
+      result = mapper.map_package_scenario(package_scenario(['Mapped', 'Unknown', 'Mapped', 'Unknown']), measures)
+
+      expect(result[:steps]).to eq [led_step, led_step]
+      expect(result[:skipped_measure_ids]).to eq ['Unknown', 'Unknown']
+      expect(result[:warnings].map { |warning| warning[:code] }).to eq [:unresolved_measure_idref, :unresolved_measure_idref]
+    end
+
+    it 'forward context to conditional mappings' do
+      mapping = single_step_mapping('Lighting', 'LightingImprovements', 'Conditional measure', 'Conditional')
+      mapping[:steps].first[:conditional_arguments] = [{ when: { building_type: 'SmallOffice' }, arguments: { office: true } }]
+      conditional_measures = { 'C' => lighting_measure(measure_id: 'C', measure_name: 'Conditional measure') }
+
+      with_map_file(JSON.generate(mappings: [mapping])) do |map_path|
+        map_mapper = BOSS::ScenarioMeasureMapper.new(map_path)
+        matched = map_mapper.map_package_scenario(package_scenario(['C', 'C']), conditional_measures, context: { building_type: 'SmallOffice' })
+        unmatched = map_mapper.map_package_scenario(package_scenario(['C']), conditional_measures, context: nil)
+
+        expect(matched[:steps]).to eq [{ measure_dir_name: 'Conditional', arguments: { __SKIP__: false, office: true } }] * 2
+        expect(unmatched[:steps]).to eq [{ measure_dir_name: 'Conditional', arguments: { __SKIP__: false } }]
+      end
+    end
+
+    it 'raise ArgumentError for invalid inputs' do
+      expect { mapper.map_package_scenario(package_scenario([]), measures, context: 'x') }.to raise_error(ArgumentError, /context/)
+      expect { mapper.map_package_scenario(nil, measures) }.to raise_error(ArgumentError, /scenario must be a Hash/)
+      expect { mapper.map_package_scenario(package_scenario([]), []) }.to raise_error(ArgumentError, /measures must be a Hash/)
+      expect { mapper.map_package_scenario(package_scenario([]).merge(scenario_type: :current_building), measures) }
+        .to raise_error(ArgumentError, /package_of_measures/)
+      expect { mapper.map_package_scenario(package_scenario(nil), measures) }.to raise_error(ArgumentError, /measure_ids/)
+    end
+
+    it 'log each new warning once without re-logging mapper warnings' do
+      mapper.map_package_scenario(package_scenario(['Unmapped', 'Unknown']), measures)
+
+      expect(BOSS.BOSS_logger).to have_received(:warn).with(/Measure has no OpenStudio mapping/).once
+      expect(BOSS.BOSS_logger).to have_received(:warn).with(/unknown measure ID.*ScenarioA/).once
+      expect(BOSS.BOSS_logger).to have_received(:warn).with(/will be skipped/).once
+    end
+
+    it 'not mutate inputs or share state between results' do
+      scenario = package_scenario(['Mapped', 'Unknown'])
+      scenario_before = Marshal.load(Marshal.dump(scenario))
+      measures_before = Marshal.load(Marshal.dump(measures))
+
+      first = mapper.map_package_scenario(scenario, measures)
+      first[:steps].first[:arguments][:lpd] = 99.0
+      first[:skipped_measure_ids].first << 'x'
+      first[:scenario_id] << 'x'
+      first[:warnings].first[:measure_idref] << 'x'
+
+      expect(scenario).to eq scenario_before
+      expect(measures).to eq measures_before
+      second = mapper.map_package_scenario(scenario, measures)
+      expect(second).to include(scenario_id: 'ScenarioA', steps: [led_step], skipped_measure_ids: ['Unknown'])
+      expect(second[:warnings].first[:measure_idref]).to eq 'Unknown'
+    end
+  end
+
   describe 'initialize should' do
     it 'raise ArgumentError for malformed conditional_arguments' do
       invalid_rule_sets = {
