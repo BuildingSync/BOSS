@@ -76,7 +76,7 @@ module BOSS
     #  3. climate zone from either building ot site
     def get_epw_file_path
       if !@epw_file_path.nil?
-        return @epw_file_path
+        return File.expand_path(@epw_file_path)
       end
 
       BOSS.BOSS_logger.info("|\t|\t- checking for city state...")
