@@ -121,6 +121,27 @@ RSpec.describe 'BuildingSyncReader' do
   end
 
   describe 'get_epw_file_path should' do
+    it "expands an explicitly provided relative path" do
+      Dir.mktmpdir do |directory|
+        Dir.chdir(directory) do
+          relative_epw_path = 'weather.epw'
+          File.write(relative_epw_path, '')
+          epw_path = File.expand_path(relative_epw_path)
+
+          reader = BOSS::BuildingSyncReader.new(REXML::Document.new(wrap_in_site('')), relative_epw_path, ASHRAE90_1)
+
+          expect(reader.get_epw_file_path).to eq epw_path
+        end
+      end
+    end
+
+    it "preserves an explicitly provided absolute path" do
+      epw_path = File.expand_path('weather/example.epw')
+      reader = BOSS::BuildingSyncReader.new(REXML::Document.new(wrap_in_site('')), epw_path, ASHRAE90_1)
+
+      expect(reader.get_epw_file_path).to eq epw_path
+    end
+
     it "get from city sate" do
       # Set Up
       doc = REXML::Document.new wrap_in_site(<<~XML)

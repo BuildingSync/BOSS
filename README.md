@@ -129,7 +129,7 @@ bundle exec boss help [COMMAND]
 ### Options
 
 - `-o`, `--output_path` (required): directory where BOSS writes output (for example, use an XML-specific folder such as `output/v2.7.0/L100_Audit-1.0.0`)
-- `-w`, `--epw_path` (optional): path to a weather `.epw` file; if omitted, BOSS derives weather from the BuildingSync file when possible
+- `-w`, `--epw_path` (optional): path to a weather `.epw` file, relative to the current working directory or absolute; BOSS stores it as an absolute path in the generated OSW. If omitted, BOSS derives weather from the BuildingSync file when possible
 - `-v`, `--standard_version` (optional): modeling standard used by BOSS, such as `ASHRAE90.1` or `CaliforniaTitle24` (defaults to `ASHRAE90.1`)
 - `-r`, `--run` (optional, `write_baseline_osw` only): run the baseline workflow after writing the OSW
 
