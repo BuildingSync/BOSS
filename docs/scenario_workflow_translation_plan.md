@@ -214,16 +214,16 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 9: Structured Mapping Results
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-9-structured-mapping-results` branch
+- Status: Done
+- Delivered by: PR #17, merged into `scenario-workflow`
 - Scope: Return mapped steps, skipped measure IDs, warnings, and scenario write/skip status.
 - Done when: Scenarios with mapped measures are writable and zero-mapped scenarios are skipped with clear warnings.
 - Avoid: Requiring callers to infer status from logs or empty arrays.
 
 ### PR 10: Baseline OSW Builder Refactor
 
-- Status: Planned
-- Delivered by: -
+- Status: In Progress
+- Delivered by: `scenario-workflow-10-baseline-osw-builder` branch
 - Scope: Move baseline writing into an internal builder while preserving public behavior.
 - Done when: Existing baseline integration tests pass and generated baseline steps are unchanged.
 - Avoid: Unexpected API, CLI, or baseline output changes.
@@ -403,8 +403,8 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 
 ### PR 9: Structured Mapping Results
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-9-structured-mapping-results` branch
+- Status: Done
+- Delivered by: PR #17, merged into `scenario-workflow`
 - Handoff: `#map_package_scenario(scenario, measures, context: {})` takes one record from `get_package_measure_scenarios` and the `get_measures` index. It returns `scenario_id`, `scenario_name`, `report_id`, `package_id`, `status`, `steps`, `skipped_measure_ids`, and `warnings`. `status` is `:writable` when `steps` is non-empty, otherwise `:skipped`.
 - Handoff: Every `MeasureID` occurrence is processed in order. Repeated references produce repeated steps, skipped IDs, and warnings. `steps` is flat, in reference order then mapping step order. This order is provisional: PR 12 reorders steps by workflow phase. Do not treat `steps` order as the final OSW order. `context` is forwarded to `map_measure` for each occurrence.
 - Handoff: Blank refs warn `:missing_measure_idref`; unknown refs warn `:unresolved_measure_idref` with `measure_idref`. Mapper warnings from `map_measure` are kept and get `report_id`, `scenario_id`, and `package_id`. Skipped scenarios end with one `:package_has_no_mapped_measures` warning. Each warning is logged once.
@@ -415,6 +415,19 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit` - 100 examples, 0 failures.
 - Verification: `bundle exec rubocop` on the changed Ruby files reports only the existing `Metrics/BlockLength` on the mapper spec's top-level `describe` block.
 - Follow-up: PR 11 should write OSWs only for `:writable` results and report `:skipped` results with their warnings.
+
+### PR 10: Baseline OSW Builder Refactor
+
+- Status: In Progress
+- Delivered by: `scenario-workflow-10-baseline-osw-builder` branch
+- Handoff: Private `BOSS::Boss.build_baseline_osw(bsync_reader)` returns a new, unsaved, symbol-keyed baseline OSW hash: template, all eight baseline steps, `configure_osw`, and local -> gem -> external `measure_paths`/`file_paths`. Each call parses the template again, so callers may mutate the result.
+- Handoff: `write_baseline_osw` keeps its signature, XML check, reader construction, `baseline/in.osw` layout, serialization, and return value. `run_baseline_osw` and the CLI are unchanged.
+- Handoff: The baseline always has eight steps, including `replace_baseline_windows` from the external comstock repo; missing data sets `__SKIP__: true` instead of removing steps. Older `spec/output` artifacts with seven steps are stale.
+- Handoff: `spec/tests/unit/boss_spec.rb` pins full step lists for `building_151.xml` and `all_measures_applied_example.xml`, captured from the pre-refactor writer.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit` - 112 examples, 0 failures.
+- Verification: `bundle exec rubocop` on the changed Ruby files adds only `Metrics/BlockLength` on the spec's top-level `describe`; `boss.rb` indentation offenses follow the file's existing `class << self` layout.
+- Note: Baseline simulations need `bundle exec rake measures:install_external`; without comstock, OpenStudio rejects the workflow with `Cannot find measure 'replace_baseline_windows'` before and after this refactor.
+- Follow-up: PR 11 should build one reader per file, call `build_baseline_osw` once, write it to `baseline/in.osw`, and deep-copy it per writable scenario.
 
 ## Verification Commands
 

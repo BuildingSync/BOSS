@@ -35,6 +35,43 @@ module BOSS
       bsync_doc = REXML::Document.new(xml_data, ignore_whitespace_nodes: :all)
       bsync_reader = BOSS::BuildingSyncReader.new(bsync_doc, epw_file_path, standard_to_be_used)
 
+      baseline_osw = build_baseline_osw(bsync_reader)
+
+      # write to file
+      workflow_dir = File.join(output_dir, 'baseline')
+      FileUtils.mkdir_p(workflow_dir)
+      osw_path = File.join(workflow_dir, 'in.osw')
+      File.open(osw_path, 'w') do |file|
+        file << JSON.pretty_generate(baseline_osw)
+      end
+      osw_path
+    end
+
+    # @param osw_dir [String] path to osws
+    def run_baseline_osw(osw_dir)
+      # assert we have a baseline osm
+      baseline_osw_path = File.join(osw_dir, 'baseline', 'in.osw')
+
+      #  assert baseline exist
+      if !File.file?(baseline_osw_path)
+        error_message = (
+          "this function requires #{baseline_osw_path}, which does not exist. "\
+          "Create #{baseline_osw_path} with `write_baseline_osw` and try again."
+        )
+        OpenStudio.logFree(OpenStudio::Error, 'BOSS.Boss.run_baseline_osw', error_message)
+        raise StandardError, "BOSS.Boss.run_baseline_osw: #{error_message}"
+      end
+
+      runner = OpenStudio::Extension::Runner.new(dirname = Dir.pwd, bundle_without = [], options = { run_simulations: true, verbose: false, num_parallel: 7, max_to_run: Float::INFINITY })
+
+      # run the baseline osm
+      return runner.run_osws([baseline_osw_path])
+    end
+
+      private
+
+    # Returns a new, unsaved baseline OSW hash for the given reader.
+    def build_baseline_osw(bsync_reader)
       # start with an empty baseline workflow
       file = File.read(EMPTY_BASELINE_OSW_PATH)
       baseline_osw = JSON.parse(file, symbolize_names: true)
@@ -77,38 +114,8 @@ module BOSS
 
       baseline_osw[:file_paths] = ordered_unique(local_file_paths + discovered_file_nonlocal_nonexternal + external_file_paths)
 
-      # write to file
-      workflow_dir = File.join(output_dir, 'baseline')
-      FileUtils.mkdir_p(workflow_dir)
-      osw_path = File.join(workflow_dir, 'in.osw')
-      File.open(osw_path, 'w') do |file|
-        file << JSON.pretty_generate(baseline_osw)
-      end
-      osw_path
+      baseline_osw
     end
-
-    # @param osw_dir [String] path to osws
-    def run_baseline_osw(osw_dir)
-      # assert we have a baseline osm
-      baseline_osw_path = File.join(osw_dir, 'baseline', 'in.osw')
-
-      #  assert baseline exist
-      if !File.file?(baseline_osw_path)
-        error_message = (
-          "this function requires #{baseline_osw_path}, which does not exist. "\
-          "Create #{baseline_osw_path} with `write_baseline_osw` and try again."
-        )
-        OpenStudio.logFree(OpenStudio::Error, 'BOSS.Boss.run_baseline_osw', error_message)
-        raise StandardError, "BOSS.Boss.run_baseline_osw: #{error_message}"
-      end
-
-      runner = OpenStudio::Extension::Runner.new(dirname = Dir.pwd, bundle_without = [], options = { run_simulations: true, verbose: false, num_parallel: 7, max_to_run: Float::INFINITY })
-
-      # run the baseline osm
-      return runner.run_osws([baseline_osw_path])
-    end
-
-      private
 
       def measure_path_to_files_path(measure_path)
         path = measure_path.to_s
