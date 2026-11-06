@@ -87,7 +87,7 @@ Write scenario workflows here:
 <output_path>/scenarios/<scenario_id>/in.osw
 ```
 
-Each scenario OSW should deep-copy the baseline workflow and append mapped retrofit steps. This keeps every scenario runnable on its own and makes parallel runs possible later.
+Each scenario OSW should deep-copy the baseline workflow and insert mapped retrofit steps before the trailing `openstudio_results` reporting step. This keeps every scenario runnable on its own and makes parallel runs possible later.
 
 ## Mapping Rules
 
@@ -222,24 +222,24 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 10: Baseline OSW Builder Refactor
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-10-baseline-osw-builder` branch
+- Status: Done
+- Delivered by: PR #18, merged into `scenario-workflow`
 - Scope: Move baseline writing into an internal builder while preserving public behavior.
 - Done when: Existing baseline integration tests pass and generated baseline steps are unchanged.
 - Avoid: Unexpected API, CLI, or baseline output changes.
 
 ### PR 11: Scenario OSW Writer API
 
-- Status: Planned
-- Delivered by: -
+- Status: In Progress
+- Delivered by: `scenario-workflow-11-12-scenario-osw-writer` branch, combined with PR 12
 - Scope: Add an API that writes baseline plus scenario OSWs for package scenarios with at least one mapped measure.
 - Done when: Generation tests show expected directories and skipped-scenario reporting.
 - Avoid: Writing OSWs for zero-mapped scenarios or changing baseline output.
 
 ### PR 12: Scenario Workflow Step Assembly
 
-- Status: Planned
-- Delivered by: -
+- Status: In Progress
+- Delivered by: `scenario-workflow-11-12-scenario-osw-writer` branch, combined with PR 11
 - Scope: Deep-copy baseline OSW and append mapped retrofit steps in a practical OpenStudio construction order, not BuildingSync `MeasureID` order. Make sure `buildingsync-measures-gem` measures are on the OSW `measure_paths`; `develop` already provides `config/external_measure_repos.yml` for this.
 - Ordering: Keep the order data-driven. For example, give each mapping step a `workflow_phase` in `scenario_measure_map.json` (envelope, then internal loads, then HVAC equipment, then controls and operations) and stable-sort mapped steps by phase, breaking ties by reference order. OpenStudio already runs model measures before EnergyPlus and reporting measures, so phases only order model measures.
 - Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments, and every mapped `measure_dir_name` resolves from the OSW `measure_paths`. A multi-measure package listed out of phase order produces phase-ordered steps. A test covers the LED mapping, whose `SetLightingLoadsByLPD` step also exists in the baseline, and proves the baseline step's arguments are unchanged.
@@ -418,8 +418,8 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 
 ### PR 10: Baseline OSW Builder Refactor
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-10-baseline-osw-builder` branch
+- Status: Done
+- Delivered by: PR #18, merged into `scenario-workflow`
 - Handoff: Private `BOSS::Boss.build_baseline_osw(bsync_reader)` returns a new, unsaved, symbol-keyed baseline OSW hash: template, all eight baseline steps, `configure_osw`, and local -> gem -> external `measure_paths`/`file_paths`. Each call parses the template again, so callers may mutate the result.
 - Handoff: `write_baseline_osw` keeps its signature, XML check, reader construction, `baseline/in.osw` layout, serialization, and return value. `run_baseline_osw` and the CLI are unchanged.
 - Handoff: The baseline always has eight steps, including `replace_baseline_windows` from the external comstock repo; missing data sets `__SKIP__: true` instead of removing steps. Older `spec/output` artifacts with seven steps are stale.
@@ -428,6 +428,22 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Verification: `bundle exec rubocop` on the changed Ruby files adds only `Metrics/BlockLength` on the spec's top-level `describe`; `boss.rb` indentation offenses follow the file's existing `class << self` layout.
 - Note: Baseline simulations need `bundle exec rake measures:install_external`; without comstock, OpenStudio rejects the workflow with `Cannot find measure 'replace_baseline_windows'` before and after this refactor.
 - Follow-up: PR 11 should build one reader per file, call `build_baseline_osw` once, write it to `baseline/in.osw`, and deep-copy it per writable scenario.
+
+### PR 11 + PR 12: Scenario OSW Writer And Step Assembly
+
+- Status: In Progress
+- Delivered by: `scenario-workflow-11-12-scenario-osw-writer` branch. Combined because the writer cannot be tested meaningfully without step assembly.
+- Handoff: `BOSS::Boss.write_baseline_and_scenario_osws(xml_file_path, output_dir, epw_file_path, standard_to_be_used)` builds one reader, one baseline OSW, one mapper, and one `{ building_type:, hvac_system_type: }` context per file. It writes `baseline/in.osw` and `scenarios/<scenario_id>/in.osw`, and returns `{ baseline_osw_path:, scenario_results:, parser_warnings: }`. Each scenario result has `scenario_id`, `scenario_name`, `report_id`, `package_id`, `status` (`:written` or `:skipped`), `osw_path` (`nil` when skipped), `skipped_measure_ids`, and `warnings`. Parser warnings are also logged. `write_baseline_osw`, `run_baseline_osw`, and the CLI are unchanged.
+- Handoff: Scenario IDs become directory names. IDs must match `\A[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,62}[A-Za-z0-9_-])?\z` and must not be a Windows reserved device name. Otherwise the scenario is skipped with `:missing_scenario_output_id` or `:unsafe_scenario_output_id`. IDs that match case-insensitively skip every scenario in the group with `:conflicting_scenario_output_id`. Because allowed IDs are ASCII, no Unicode normalization is needed. Skipped-ID scenarios are not mapped.
+- Handoff: `scenario_measure_map.json` has a top-level `workflow_phases` array (`envelope`, `internal_loads`, `hvac_equipment`, `controls_operations`), and each step has a `workflow_phase`. The mapper validates that the phases are unique and non-blank and that every step uses a declared phase. It keeps `workflow_phase` on returned steps and exposes `#workflow_phases`. Maps without `workflow_phases` are still accepted, but their steps must not carry a phase. Plug-load controls are `controls_operations` and refrigeration replacement is `internal_loads`, even though both use `ReduceElectricEquipmentLoadsByPercentage`.
+- Handoff: The writer stable-sorts mapped steps by phase index, then by reference order. It strips `workflow_phase` and inserts the full step hashes before `openstudio_results`. Baseline steps, including the baseline `SetLightingLoadsByLPD`, are never modified. `set_measure_argument` is not used.
+- Handoff: `config/external_measure_repos.yml` supports an optional boolean `scenario_only`. `buildingsync-measures-gem` is pinned to `c40c2ed65952a1c3bfe82bf1daa542ce5e1ee8d6` (`develop`, `lib/measures`) with `scenario_only: true`. `ExternalMeasureRepoManager#resolved_measure_directories(include_scenario_only: false)` keeps it out of baseline OSWs. Scenario OSWs append it, and its `files` path, after the baseline paths. `install_all` installs every repo.
+- Handoff: Before writing anything, the writer checks that every mapped `measure_dir_name` has a `measure.rb` on the scenario `measure_paths`. If any are missing, it raises `StandardError` naming them and pointing to `bundle exec rake measures:install_external`.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit spec/tests/integration/scenario_osw_generation_spec.rb` - 128 examples, 0 failures, after `rake measures:install_external`.
+- Verification: The `building_151.xml` smoke run with real installed repos wrote 12 scenario OSWs; Scenario4, Scenario5, Scenario6, and Scenario18 were skipped.
+- Verification: `bundle exec rubocop` on the changed files adds no new offenses except `Metrics/BlockLength` in specs and the existing `class << self` indentation in `boss.rb`.
+- Not run: Scenario simulations. These are PR 14/PR 18 scope.
+- Follow-up: PR 13 can reuse the private `build_scenario_osw` / `order_scenario_steps` helpers instead of adding new appending logic. PR 14 should run only OSWs with `status: :written`.
 
 ## Verification Commands
 

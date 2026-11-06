@@ -1,5 +1,11 @@
 {
   "schema_version": "1.0",
+  "workflow_phases": [
+    "envelope",
+    "internal_loads",
+    "hvac_equipment",
+    "controls_operations"
+  ],
   "lookup_order": [
     "technology_category_element_name_and_measure_name",
     "system_category_affected_and_measure_name"
@@ -12,6 +18,7 @@
       "steps": [
         {
           "measure_dir_name": "EnableEconomizerControl",
+          "workflow_phase": "controls_operations",
           "arguments": {
             "__SKIP__": false,
             "economizer_type": "FixedDryBulb"
@@ -26,6 +33,7 @@
       "steps": [
         {
           "measure_dir_name": "EnableDemandControlledVentilation",
+          "workflow_phase": "controls_operations",
           "arguments": {
             "__SKIP__": false,
             "dcv_type": "EnableDCV"
@@ -40,6 +48,7 @@
       "steps": [
         {
           "measure_dir_name": "IncreaseInsulationRValueForRoofsByPercentage",
+          "workflow_phase": "envelope",
           "arguments": {
             "__SKIP__": false,
             "r_value": 20
@@ -54,6 +63,7 @@
       "steps": [
         {
           "measure_dir_name": "AdjustThermostatSetpointsByDegrees",
+          "workflow_phase": "controls_operations",
           "arguments": {
             "__SKIP__": false,
             "cooling_adjustment": 1.0,
@@ -69,6 +79,7 @@
       "steps": [
         {
           "measure_dir_name": "ReduceLightingLoadsByPercentage",
+          "workflow_phase": "controls_operations",
           "arguments": {
             "__SKIP__": false,
             "lighting_power_reduction_percent": 5
@@ -83,6 +94,7 @@
       "steps": [
         {
           "measure_dir_name": "SetLightingLoadsByLPD",
+          "workflow_phase": "internal_loads",
           "arguments": {
             "__SKIP__": false,
             "lpd": 0.6
@@ -97,6 +109,7 @@
       "steps": [
         {
           "measure_dir_name": "ReduceElectricEquipmentLoadsByPercentage",
+          "workflow_phase": "controls_operations",
           "arguments": {
             "__SKIP__": false,
             "elecequip_power_reduction_percent": 20.0
@@ -111,6 +124,7 @@
       "steps": [
         {
           "measure_dir_name": "ReduceElectricEquipmentLoadsByPercentage",
+          "workflow_phase": "internal_loads",
           "arguments": {
             "__SKIP__": false,
             "elecequip_power_reduction_percent": 5
@@ -125,6 +139,7 @@
       "steps": [
         {
           "measure_dir_name": "modify_envelope_insulation",
+          "workflow_phase": "envelope",
           "arguments": {
             "__SKIP__": false,
             "roof_target_rvalue": 5.28
@@ -139,6 +154,7 @@
       "steps": [
         {
           "measure_dir_name": "ReduceSpaceInfiltrationByPercentage",
+          "workflow_phase": "envelope",
           "arguments": {
             "__SKIP__": false,
             "space_infiltration_reduction_percent": 30.0
@@ -153,6 +169,7 @@
       "steps": [
         {
           "measure_dir_name": "modify_envelope_insulation",
+          "workflow_phase": "envelope",
           "arguments": {
             "__SKIP__": false,
             "wall_target_rvalue": 4.4
@@ -167,6 +184,7 @@
       "steps": [
         {
           "measure_dir_name": "IncreaseInsulationRValueForExteriorWallsByPercentage",
+          "workflow_phase": "envelope",
           "arguments": {
             "__SKIP__": false,
             "r_value": 20

@@ -15,6 +15,8 @@ local_measure_roots:
 # - url: git repository URL
 # - ref: pinned tag/branch/commit to checkout
 # - measure_roots: one or more paths inside the repo that contain measure directories
+# - scenario_only (optional, default false): when true, measure roots are added only to
+#   scenario workflows (scenarios/<id>/in.osw), never to baseline/in.osw
 #
 
 # The below measures are needed for the BOSS L200 workflow.
@@ -25,3 +27,12 @@ repos:
     measure_roots:
       - measures
       - resources/measures
+
+  # BuildingSync measures used by scenario mappings (modify_envelope_insulation).
+  # Pinned to a commit on develop.
+  - name: buildingsync-measures-gem
+    url: https://github.com/BuildingSync/buildingsync-measures-gem.git
+    ref: c40c2ed65952a1c3bfe82bf1daa542ce5e1ee8d6
+    measure_roots:
+      - lib/measures
+    scenario_only: true

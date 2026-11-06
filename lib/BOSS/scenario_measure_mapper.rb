@@ -25,6 +25,9 @@ module BOSS
     CONDITION_KEYS = [:building_type, :hvac_system_type].freeze
     RULE_KEYS = [:when, :arguments].freeze
 
+    # Ordered phase names from the map's workflow_phases; empty when the map declares none.
+    attr_reader :workflow_phases
+
     def initialize(map_path = SCENARIO_MEASURE_MAP_PATH)
       @map_path = map_path
       mappings = _load_mappings(map_path)
@@ -162,16 +165,49 @@ module BOSS
       mappings = map.is_a?(Hash) ? map[:mappings] : nil
       raise ArgumentError, "Scenario measure map '#{map_path}' must define a 'mappings' array" if !mappings.is_a?(Array)
 
+      @workflow_phases = _load_workflow_phases(map, map_path)
+
       mappings.each_with_index do |mapping, mapping_index|
         Array(mapping.is_a?(Hash) ? mapping[:steps] : nil).each_with_index do |step, step_index|
-          next if !step.is_a?(Hash) || !step.key?(:conditional_arguments)
+          next if !step.is_a?(Hash)
 
-          location = "Scenario measure map '#{map_path}' mappings[#{mapping_index}].steps[#{step_index}].conditional_arguments"
-          _validate_conditional_arguments(step[:conditional_arguments], location)
+          location = "Scenario measure map '#{map_path}' mappings[#{mapping_index}].steps[#{step_index}]"
+          _validate_workflow_phase(step, location)
+          next if !step.key?(:conditional_arguments)
+
+          _validate_conditional_arguments(step[:conditional_arguments], "#{location}.conditional_arguments")
         end
       end
 
       return mappings
+    end
+
+    def _load_workflow_phases(map, map_path)
+      return [].freeze if !map.key?(:workflow_phases)
+
+      phases = map[:workflow_phases]
+      location = "Scenario measure map '#{map_path}' workflow_phases"
+      if !phases.is_a?(Array) || phases.empty? || phases.any? { |phase| !phase.is_a?(String) || phase.strip.empty? }
+        raise ArgumentError, "#{location} must be a non-empty array of non-blank strings"
+      end
+      raise ArgumentError, "#{location} must not contain duplicates" if phases.uniq.length != phases.length
+
+      return phases.map(&:freeze).freeze
+    end
+
+    # Maps without workflow_phases are legacy maps and may not tag steps. Maps that declare
+    # phases must tag every step with a declared phase.
+    def _validate_workflow_phase(step, location)
+      if @workflow_phases.empty?
+        return if !step.key?(:workflow_phase)
+
+        raise ArgumentError, "#{location}.workflow_phase requires a top-level workflow_phases array"
+      end
+
+      return if @workflow_phases.include?(step[:workflow_phase])
+
+      raise ArgumentError,
+            "#{location}.workflow_phase must be one of #{@workflow_phases.inspect}, got #{step[:workflow_phase].inspect}"
     end
 
     def _validate_conditional_arguments(rules, location)
