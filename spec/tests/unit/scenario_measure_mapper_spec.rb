@@ -76,7 +76,7 @@ RSpec.describe 'ScenarioMeasureMapper' do
       expect(result).to eq(
         measure_id: 'Measure1',
         steps: [
-          { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 0.6 } }
+          { measure_dir_name: 'SetLightingLoadsByLPD', workflow_phase: 'internal_loads', arguments: { __SKIP__: false, lpd: 0.6 } }
         ],
         warnings: []
       )
@@ -197,10 +197,13 @@ RSpec.describe 'ScenarioMeasureMapper' do
 
       # Assert
       expect(results.fetch('MeasureType-45099320')[:steps]).to eq [
-        { measure_dir_name: 'ReduceSpaceInfiltrationByPercentage', arguments: { __SKIP__: false, space_infiltration_reduction_percent: 30.0 } }
+        {
+          measure_dir_name: 'ReduceSpaceInfiltrationByPercentage', workflow_phase: 'envelope',
+          arguments: { __SKIP__: false, space_infiltration_reduction_percent: 30.0 }
+        }
       ]
       expect(results.fetch('MeasureType-45099340')[:steps]).to eq [
-        { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 0.6 } }
+        { measure_dir_name: 'SetLightingLoadsByLPD', workflow_phase: 'internal_loads', arguments: { __SKIP__: false, lpd: 0.6 } }
       ]
       ['MeasureType-45099360', 'MeasureType-45099380'].each do |measure_id|
         expect(results.fetch(measure_id)[:steps]).to eq []
@@ -301,7 +304,7 @@ RSpec.describe 'ScenarioMeasureMapper' do
       # Assert
       expect(measure).to eq measure_before
       expect(second_result[:steps]).to eq [
-        { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 0.6 } }
+        { measure_dir_name: 'SetLightingLoadsByLPD', workflow_phase: 'internal_loads', arguments: { __SKIP__: false, lpd: 0.6 } }
       ]
     end
 
@@ -477,7 +480,9 @@ RSpec.describe 'ScenarioMeasureMapper' do
     end
 
     let(:scenario_context) { { report_id: 'ReportA', scenario_id: 'ScenarioA', package_id: 'PackageA' } }
-    let(:led_step) { { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 0.6 } } }
+    let(:led_step) do
+      { measure_dir_name: 'SetLightingLoadsByLPD', workflow_phase: 'internal_loads', arguments: { __SKIP__: false, lpd: 0.6 } }
+    end
     let(:measures) do
       {
         'Mapped' => lighting_measure(measure_id: 'Mapped'),
@@ -649,6 +654,40 @@ RSpec.describe 'ScenarioMeasureMapper' do
     it 'raise ArgumentError when the map file has no mappings array' do
       with_map_file(JSON.generate(schema_version: '1.0')) do |map_path|
         expect { BOSS::ScenarioMeasureMapper.new(map_path) }.to raise_error(ArgumentError, /'mappings' array/)
+      end
+    end
+
+    it 'expose the shipped workflow phases in order' do
+      expect(mapper.workflow_phases).to eq ['envelope', 'internal_loads', 'hvac_equipment', 'controls_operations']
+    end
+
+    it 'allow legacy maps without workflow phases' do
+      mapping = single_step_mapping('Lighting', 'LightingImprovements', 'Legacy', 'Legacy')
+      with_map_file(JSON.generate(mappings: [mapping])) do |map_path|
+        expect(BOSS::ScenarioMeasureMapper.new(map_path).workflow_phases).to eq []
+      end
+    end
+
+    it 'raise ArgumentError for invalid workflow phases' do
+      tagged = single_step_mapping('Lighting', 'LightingImprovements', 'Tagged', 'Tagged')
+      tagged[:steps].first[:workflow_phase] = 'envelope'
+      untagged = single_step_mapping('Lighting', 'LightingImprovements', 'Untagged', 'Untagged')
+      unknown = single_step_mapping('Lighting', 'LightingImprovements', 'Unknown', 'Unknown')
+      unknown[:steps].first[:workflow_phase] = 'plumbing'
+
+      invalid_maps = {
+        { mappings: [tagged] } => /workflow_phase requires a top-level workflow_phases array/,
+        { workflow_phases: [], mappings: [] } => /workflow_phases must be a non-empty array/,
+        { workflow_phases: ['envelope', ' '], mappings: [] } => /workflow_phases must be a non-empty array/,
+        { workflow_phases: ['envelope', 'envelope'], mappings: [] } => /must not contain duplicates/,
+        { workflow_phases: ['envelope'], mappings: [untagged] } => /steps\[0\]\.workflow_phase must be one of/,
+        { workflow_phases: ['envelope'], mappings: [unknown] } => /steps\[0\]\.workflow_phase must be one of/
+      }
+
+      invalid_maps.each do |map, message|
+        with_map_file(JSON.generate(map)) do |map_path|
+          expect { BOSS::ScenarioMeasureMapper.new(map_path) }.to raise_error(ArgumentError, message)
+        end
       end
     end
   end

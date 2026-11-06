@@ -82,4 +82,30 @@ RSpec.describe 'scenario_measure_map.json' do
     expect(wall_step.fetch('measure_dir_name')).to eq 'modify_envelope_insulation'
     expect(wall_step.fetch('arguments')).to include('wall_target_rvalue' => 4.4)
   end
+
+  it 'assigns each step a declared workflow phase' do
+    expect(scenario_measure_map.fetch('workflow_phases')).to eq [
+      'envelope', 'internal_loads', 'hvac_equipment', 'controls_operations'
+    ]
+
+    phases = mappings.to_h do |mapping|
+      [[mapping.fetch('system_category_affected'), mapping.fetch('measure_name')],
+       mapping.fetch('steps').map { |step| step.fetch('workflow_phase') }]
+    end
+
+    expect(phases).to eq(
+      ['Air Distribution', 'Add or repair economizer'] => ['controls_operations'],
+      ['Air Distribution', 'Install demand control ventilation'] => ['controls_operations'],
+      ['Ceiling', 'Increase ceiling insulation'] => ['envelope'],
+      ['General Controls and Operations', 'Upgrade operating protocols, calibration, and/or sequencing'] => ['controls_operations'],
+      ['Lighting', 'Add occupancy sensors'] => ['controls_operations'],
+      ['Lighting', 'Retrofit with light emitting diode technologies'] => ['internal_loads'],
+      ['Plug Load', 'Install plug load controls'] => ['controls_operations'],
+      ['Refrigeration', 'Replace ice/refrigeration equipment with high efficiency units'] => ['internal_loads'],
+      ['Roof', 'Increase roof insulation'] => ['envelope'],
+      ['Wall', 'Air seal envelope'] => ['envelope'],
+      ['Wall', 'Increase wall insulation'] => ['envelope'],
+      ['Wall', 'Insulate thermal bypasses'] => ['envelope']
+    )
+  end
 end

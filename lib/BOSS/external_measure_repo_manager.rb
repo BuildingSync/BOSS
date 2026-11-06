@@ -47,14 +47,18 @@ module BOSS
         install_repo(repo_entry)
       end
 
-      resolved_measure_directories
+      resolved_measure_directories(include_scenario_only: true)
     end
 
-    def resolved_measure_directories
+    # Repos marked scenario_only: true are left off baseline workflows and are only
+    # returned when include_scenario_only is true.
+    def resolved_measure_directories(include_scenario_only: false)
       return [] if !manifest_exists?
 
       directories = []
       repo_entries.each do |repo_entry|
+        next if repo_entry['scenario_only'] && !include_scenario_only
+
         repo_root = repo_checkout_dir(repo_entry)
         if !Dir.exist?(repo_root)
           message = "Repository '#{repo_entry['name']}' is not installed at #{repo_root}. Run rake measures:install_external."
@@ -124,6 +128,11 @@ module BOSS
       if !repo['measure_roots'].is_a?(Array) || repo['measure_roots'].empty?
         raise StandardError, "Repo '#{repo['name']}' must define a non-empty measure_roots array"
       end
+
+      if repo.key?('scenario_only') && ![true, false].include?(repo['scenario_only'])
+        raise StandardError, "Repo '#{repo['name']}' scenario_only must be true or false"
+      end
+
       repo
     end
 

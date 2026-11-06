@@ -166,6 +166,53 @@ RSpec.describe BOSS::ExternalMeasureRepoManager do
       end
     end
 
+    it 'leaves scenario_only repos out unless include_scenario_only is true' do
+      Dir.mktmpdir do |dir|
+        install_dir = File.join(dir, 'vendor')
+        shared_root = File.join(install_dir, 'shared_repo', 'measures')
+        scenario_root = File.join(install_dir, 'scenario_repo', 'lib', 'measures')
+        FileUtils.mkdir_p(shared_root)
+        FileUtils.mkdir_p(scenario_root)
+
+        yaml = <<~YAML
+          repos:
+            - name: scenario_repo
+              url: https://example.com/scenario.git
+              ref: abc123
+              measure_roots:
+                - lib/measures
+              scenario_only: true
+            - name: shared_repo
+              url: https://example.com/shared.git
+              ref: main
+              measure_roots:
+                - measures
+              scenario_only: false
+        YAML
+        mgr = manager_for(write_manifest(dir, yaml), install_dir)
+
+        expect(mgr.resolved_measure_directories).to eq [shared_root]
+        expect(mgr.resolved_measure_directories(include_scenario_only: true)).to eq [scenario_root, shared_root]
+      end
+    end
+
+    it 'rejects a non-boolean scenario_only value' do
+      Dir.mktmpdir do |dir|
+        yaml = <<~YAML
+          repos:
+            - name: my_repo
+              url: https://example.com/repo.git
+              ref: main
+              measure_roots:
+                - measures
+              scenario_only: "yes"
+        YAML
+        mgr = manager_for(write_manifest(dir, yaml), dir)
+
+        expect { mgr.resolved_measure_directories }.to raise_error(StandardError, /scenario_only must be true or false/)
+      end
+    end
+
     it 'skips repo if checkout directory does not exist' do
       Dir.mktmpdir do |dir|
         install_dir = File.join(dir, 'vendor')
