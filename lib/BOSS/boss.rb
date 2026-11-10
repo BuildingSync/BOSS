@@ -76,8 +76,9 @@ module BOSS
       baseline_osw = build_baseline_osw(bsync_reader)
 
       manager = ExternalMeasureRepoManager.new
-      scenario_only_dirs = manager.resolved_measure_directories(include_scenario_only: true) -
-                           manager.resolved_measure_directories
+      baseline_dirs = manager.resolved_measure_directories
+      all_dirs = manager.resolved_measure_directories(include_scenario_only: true)
+      scenario_only_dirs = all_dirs - baseline_dirs
       scenario_measure_paths = ordered_unique(baseline_osw[:measure_paths] + scenario_only_dirs)
       scenario_file_paths = ordered_unique(
         baseline_osw[:file_paths] + scenario_only_dirs.map { |path| measure_path_to_files_path(path) }
