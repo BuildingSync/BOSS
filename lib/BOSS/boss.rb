@@ -244,8 +244,10 @@ module BOSS
 
       # Stable sort by declared workflow phase, then by package reference order.
       def order_scenario_steps(steps, workflow_phases)
+        phase_index = workflow_phases.each_with_index.to_h
+
         steps.each_with_index
-             .sort_by { |step, index| [workflow_phases.index(step[:workflow_phase]) || workflow_phases.length, index] }
+             .sort_by { |step, index| [phase_index.fetch(step[:workflow_phase], workflow_phases.length), index] }
              .map { |step, _index| step.except(:workflow_phase) }
       end
 
