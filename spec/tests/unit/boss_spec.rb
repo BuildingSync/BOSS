@@ -26,7 +26,7 @@ RSpec.describe BOSS::Boss do
       .and_return(openstudio_weather_file_path)
   end
 
-  def stub_measure_dirs(local:, external:, discovered:)
+  def stub_measure_dirs(local:, external:, discovered:, scenario_only: [])
     allow(OpenStudio::Extension).to receive(:configure_osw) do |osw|
       osw[:measure_paths] = discovered
     end
@@ -35,6 +35,8 @@ RSpec.describe BOSS::Boss do
     allow(BOSS::ExternalMeasureRepoManager).to receive(:new).and_return(fake_manager)
     allow(fake_manager).to receive(:local_measure_directories).and_return(local)
     allow(fake_manager).to receive(:resolved_measure_directories).and_return(external)
+    allow(fake_manager).to receive(:resolved_measure_directories)
+      .with(include_scenario_only: true).and_return(external + scenario_only)
   end
 
   def build_reader(xml_file_name)
@@ -314,6 +316,195 @@ RSpec.describe BOSS::Boss do
         measure_paths = JSON.parse(File.read(osw_path), symbolize_names: true)[:measure_paths]
         expect(measure_paths.count(LOCAL_MEASURES_DIR)).to eq 1
       end
+    end
+  end
+
+  describe '.write_baseline_and_scenario_osws' do
+    let(:building_151_written_ids) do
+      ['Scenario1', 'Scenario3', 'Scenario7', 'Scenario8', 'Scenario9', 'Scenario10',
+       'Scenario11', 'Scenario12', 'Scenario14', 'Scenario16', 'Scenario24', 'Scenario25']
+    end
+    let(:led_step) { { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 0.6 } } }
+
+    before { allow(BOSS.BOSS_logger).to receive(:warn) }
+
+    # Creates measure.rb sentinels for every measure the shipped map can emit.
+    def with_scenario_measure_dir
+      Dir.mktmpdir do |dir|
+        scenario_measure_dir = File.join(dir, 'measures')
+        map = JSON.parse(File.read(SCENARIO_MEASURE_MAP_PATH), symbolize_names: true)
+        map[:mappings].flat_map { |mapping| mapping[:steps] }.each do |step|
+          FileUtils.mkdir_p(File.join(scenario_measure_dir, step[:measure_dir_name]))
+          File.write(File.join(scenario_measure_dir, step[:measure_dir_name], 'measure.rb'), '')
+        end
+        yield scenario_measure_dir
+      end
+    end
+
+    def write_building_151(output_dir, scenario_measure_dir)
+      stub_measure_dirs(
+        local: [LOCAL_MEASURES_DIR], external: [external_measure_dir],
+        discovered: [gem_measure_dir], scenario_only: [scenario_measure_dir]
+      )
+      described_class.write_baseline_and_scenario_osws(xml_path, output_dir, openstudio_weather_file_path, ASHRAE90_1)
+    end
+
+    def read_osw(path)
+      JSON.parse(File.read(path), symbolize_names: true)
+    end
+
+    it 'writes the baseline and one OSW per writable building_151 scenario' do
+      with_scenario_measure_dir do |scenario_measure_dir|
+        Dir.mktmpdir do |output_dir|
+          result = write_building_151(output_dir, scenario_measure_dir)
+
+          expect(result[:baseline_osw_path]).to eq File.join(output_dir, 'baseline', 'in.osw')
+          expect(read_osw(result[:baseline_osw_path])[:steps]).to eq building_151_steps
+          expect(read_osw(result[:baseline_osw_path])[:measure_paths]).not_to include(scenario_measure_dir)
+          expect(Dir.children(output_dir)).to contain_exactly('baseline', 'scenarios')
+          expect(Dir.children(File.join(output_dir, 'scenarios'))).to match_array building_151_written_ids
+
+          written, skipped = result[:scenario_results].partition { |scenario| scenario[:status] == :written }
+          expect(written.map { |scenario| scenario[:scenario_id] }).to eq building_151_written_ids
+          expect(skipped.map { |scenario| scenario[:scenario_id] }).to eq ['Scenario4', 'Scenario5', 'Scenario6', 'Scenario18']
+          expect(skipped.map { |scenario| scenario[:osw_path] }).to all(be_nil)
+          written.each do |scenario|
+            expect(scenario[:osw_path]).to eq File.join(output_dir, 'scenarios', scenario[:scenario_id], 'in.osw')
+          end
+          expect(result[:parser_warnings]).to be_an Array
+        end
+      end
+    end
+
+    it 'inserts mapped steps before openstudio_results without changing baseline steps' do
+      with_scenario_measure_dir do |scenario_measure_dir|
+        Dir.mktmpdir do |output_dir|
+          result = write_building_151(output_dir, scenario_measure_dir)
+          scenario1 = result[:scenario_results].find { |scenario| scenario[:scenario_id] == 'Scenario1' }
+          osw = read_osw(scenario1[:osw_path])
+
+          expect(osw[:steps]).to eq building_151_steps[0..-2] + [led_step, building_151_steps.last]
+          expect(osw[:steps].map { |step| step.key?(:workflow_phase) }).to all(be false)
+          expect(osw[:measure_paths]).to eq [LOCAL_MEASURES_DIR, gem_measure_dir, external_measure_dir, scenario_measure_dir]
+          expect(osw[:file_paths].last).to eq File.join(File.dirname(scenario_measure_dir), 'files')
+        end
+      end
+    end
+
+    it 'writes multi-measure package steps in phase order, then reference order' do
+      # References are listed out of phase order; two phases have two steps each.
+      package = {
+        scenario_id: 'MixedPackage', scenario_name: 'Mixed', report_id: 'Report1', package_id: 'PackageMixed',
+        scenario_type: :package_of_measures, measure_ids: ['Measure7', 'Measure1', 'Measure9', 'Measure8', 'Measure3']
+      }
+      allow_any_instance_of(BOSS::BuildingSyncReader).to receive(:get_package_measure_scenarios).and_return([package])
+
+      with_scenario_measure_dir do |scenario_measure_dir|
+        Dir.mktmpdir do |output_dir|
+          result = write_building_151(output_dir, scenario_measure_dir)
+          osw = read_osw(result[:scenario_results].first[:osw_path])
+          mapped_steps = osw[:steps][(building_151_steps.length - 1)..-2]
+
+          expect(mapped_steps.map { |step| step[:measure_dir_name] }).to eq [
+            'modify_envelope_insulation',              # Measure9, envelope
+            'ReduceSpaceInfiltrationByPercentage',     # Measure3, envelope
+            'SetLightingLoadsByLPD',                   # Measure1, internal_loads
+            'ReduceLightingLoadsByPercentage',         # Measure7, controls_operations
+            'ReduceElectricEquipmentLoadsByPercentage' # Measure8, controls_operations
+          ]
+          expect(mapped_steps[2]).to eq led_step
+          expect(osw[:steps].first(building_151_steps.length - 1)).to eq building_151_steps[0..-2]
+          expect(osw[:steps].last).to eq building_151_steps.last
+        end
+      end
+    end
+
+    it 'raises before writing anything when a mapped measure is not on measure_paths' do
+      Dir.mktmpdir do |output_dir|
+        stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir])
+
+        expect do
+          described_class.write_baseline_and_scenario_osws(xml_path, output_dir, openstudio_weather_file_path, ASHRAE90_1)
+        end.to raise_error(StandardError, /not found on measure_paths: .*modify_envelope_insulation.*rake measures:install_external/)
+        expect(Dir.children(output_dir)).to be_empty
+      end
+    end
+
+    it 'writes only the baseline when the file has no package scenarios' do
+      Dir.mktmpdir do |output_dir|
+        stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir])
+        xml = File.join(BOSS_SPEC_FILES_DIR, 'v2.7.0', 'building_151_no_measures.xml')
+
+        result = described_class.write_baseline_and_scenario_osws(xml, output_dir, openstudio_weather_file_path, ASHRAE90_1)
+
+        expect(result[:scenario_results]).to eq []
+        expect(Dir.children(output_dir)).to eq ['baseline']
+      end
+    end
+
+    it 'raises the existing error for a missing XML file without writing output' do
+      Dir.mktmpdir do |output_dir|
+        missing = File.join(output_dir, 'missing.xml')
+        expect { described_class.write_baseline_and_scenario_osws(missing, output_dir, nil, ASHRAE90_1) }
+          .to raise_error(RuntimeError, "File '#{missing}' does not exist")
+        expect(Dir.children(output_dir)).to be_empty
+      end
+    end
+  end
+
+  describe '.order_scenario_steps' do
+    it 'sorts by workflow phase, keeps reference order within a phase, and drops workflow_phase' do
+      phases = ['envelope', 'internal_loads', 'hvac_equipment', 'controls_operations']
+      steps = [
+        { measure_dir_name: 'Controls', workflow_phase: 'controls_operations', arguments: {} },
+        { measure_dir_name: 'Wall', workflow_phase: 'envelope', arguments: {} },
+        { measure_dir_name: 'Lights', workflow_phase: 'internal_loads', arguments: {} },
+        { measure_dir_name: 'Roof', workflow_phase: 'envelope', arguments: {} }
+      ]
+
+      ordered = described_class.send(:order_scenario_steps, steps, phases)
+
+      expect(ordered).to eq [
+        { measure_dir_name: 'Wall', arguments: {} },
+        { measure_dir_name: 'Roof', arguments: {} },
+        { measure_dir_name: 'Lights', arguments: {} },
+        { measure_dir_name: 'Controls', arguments: {} }
+      ]
+      expect(steps.first).to include(workflow_phase: 'controls_operations')
+    end
+
+    it 'keeps reference order when the map declares no phases' do
+      steps = [{ measure_dir_name: 'B', arguments: {} }, { measure_dir_name: 'A', arguments: {} }]
+      expect(described_class.send(:order_scenario_steps, steps, [])).to eq steps
+    end
+  end
+
+  describe '.scenario_output_id_warnings' do
+    before { allow(BOSS.BOSS_logger).to receive(:warn) }
+
+    it 'flags missing, unsafe, and case-conflicting IDs and accepts portable IDs' do
+      ids = [
+        'Scenario1', 'Scenario-2.a_b', nil, '  ', '../escape', 'a/b', 'CON', 'nul.txt', 'trailing.',
+        '.hidden', 'Dup', 'dup', 'x' * 65
+      ]
+      scenarios = ids.map { |id| { scenario_id: id, report_id: 'Report1', package_id: 'Package1' } }
+
+      codes = described_class.send(:scenario_output_id_warnings, scenarios).map { |warning| warning&.fetch(:code) }
+
+      expect(codes).to eq [
+        nil, nil, :missing_scenario_output_id, :missing_scenario_output_id,
+        :unsafe_scenario_output_id, :unsafe_scenario_output_id, :unsafe_scenario_output_id,
+        :unsafe_scenario_output_id, :unsafe_scenario_output_id, :unsafe_scenario_output_id,
+        :conflicting_scenario_output_id, :conflicting_scenario_output_id, :unsafe_scenario_output_id
+      ]
+    end
+
+    it 'returns structured warnings with scenario context' do
+      warning = described_class.send(:scenario_output_id_warnings, [{ scenario_id: 'a b', report_id: 'R', package_id: 'P' }]).first
+
+      expect(warning).to include(
+        code: :unsafe_scenario_output_id, severity: :warning, report_id: 'R', scenario_id: 'a b', package_id: 'P'
+      )
     end
   end
 end
