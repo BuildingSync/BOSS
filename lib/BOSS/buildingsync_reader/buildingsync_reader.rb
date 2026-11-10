@@ -6,6 +6,8 @@
 
 require 'json'
 require 'openstudio-standards'
+require 'BOSS/boss_logger'
+require 'BOSS/constants'
 require_relative 'systems_map'
 require_relative 'bcl_weather_file_downloader'
 include Math
