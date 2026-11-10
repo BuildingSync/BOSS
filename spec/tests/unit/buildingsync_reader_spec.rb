@@ -276,6 +276,13 @@ RSpec.describe 'BuildingSyncReader' do
 
       expect(buidingsync_reader.get_total_floor_area).to eq 20000
     end
+
+    it "get from site when building is missing" do
+      doc = REXML::Document.new wrap_in_site(floor_areas(20000))
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      expect(buidingsync_reader.get_total_floor_area).to eq 20000
+    end
   end
 
   describe 'get_floor_above_grade should' do

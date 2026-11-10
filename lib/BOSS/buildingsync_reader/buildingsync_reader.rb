@@ -182,7 +182,7 @@ module BOSS
     def get_total_floor_area(num_indent=2)
       # check building floor area
       BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking building for total floor area...")
-      building_floor_areas_xml = @building_xml.elements["#{@ns}FloorAreas"]
+      building_floor_areas_xml = @building_xml&.elements["#{@ns}FloorAreas"]
       building_area = !building_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(building_floor_areas_xml, num_indent+1) : 0
       BOSS.BOSS_logger.info("#{"|\t"*num_indent}  building floor area is #{building_area}")
       return building_area if building_area > 0
