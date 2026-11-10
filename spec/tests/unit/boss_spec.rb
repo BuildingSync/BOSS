@@ -391,6 +391,34 @@ RSpec.describe BOSS::Boss do
       end
     end
 
+    it 'writes multi-measure package steps in phase order, then reference order' do
+      # References are listed out of phase order; two phases have two steps each.
+      package = {
+        scenario_id: 'MixedPackage', scenario_name: 'Mixed', report_id: 'Report1', package_id: 'PackageMixed',
+        scenario_type: :package_of_measures, measure_ids: ['Measure7', 'Measure1', 'Measure9', 'Measure8', 'Measure3']
+      }
+      allow_any_instance_of(BOSS::BuildingSyncReader).to receive(:get_package_measure_scenarios).and_return([package])
+
+      with_scenario_measure_dir do |scenario_measure_dir|
+        Dir.mktmpdir do |output_dir|
+          result = write_building_151(output_dir, scenario_measure_dir)
+          osw = read_osw(result[:scenario_results].first[:osw_path])
+          mapped_steps = osw[:steps][(building_151_steps.length - 1)..-2]
+
+          expect(mapped_steps.map { |step| step[:measure_dir_name] }).to eq [
+            'modify_envelope_insulation',              # Measure9, envelope
+            'ReduceSpaceInfiltrationByPercentage',     # Measure3, envelope
+            'SetLightingLoadsByLPD',                   # Measure1, internal_loads
+            'ReduceLightingLoadsByPercentage',         # Measure7, controls_operations
+            'ReduceElectricEquipmentLoadsByPercentage' # Measure8, controls_operations
+          ]
+          expect(mapped_steps[2]).to eq led_step
+          expect(osw[:steps].first(building_151_steps.length - 1)).to eq building_151_steps[0..-2]
+          expect(osw[:steps].last).to eq building_151_steps.last
+        end
+      end
+    end
+
     it 'raises before writing anything when a mapped measure is not on measure_paths' do
       Dir.mktmpdir do |output_dir|
         stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir])
