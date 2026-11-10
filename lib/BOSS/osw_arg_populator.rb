@@ -8,10 +8,32 @@ require 'openstudio/extension'
 require 'BOSS/boss_logger'
 
 class OSWArgPopulator
+  # Inserts a deep copy of step before the first before_measure step, or appends it.
+  # Returns the inserted step.
+  def self.append_step(osw, step, before_measure: nil)
+    new_step = Marshal.load(Marshal.dump(step))
+    new_step[:arguments] ||= {}
+    steps = osw[:steps]
+    index = before_measure && steps.index { |existing| existing[:measure_dir_name] == before_measure }
+    steps.insert(index || steps.length, new_step)
+    new_step
+  end
+
+  # Sets one argument on this step only. set_measure_argument updates every step with the
+  # same measure_dir_name, so it is given a one-step workflow.
+  def self.set_step_argument(step, name, value)
+    OpenStudio::Extension.set_measure_argument({ steps: [step] }, step[:measure_dir_name], name, value)
+    step
+  end
+
+  def self.step_argument_setter(osw, measure_dir_name)
+    step = append_step(osw, { measure_dir_name:, arguments: {} })
+    ->(key, value) { set_step_argument(step, key, value) }
+  end
+
   def self.populate_set_run_period_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("+++++++++++++++++++++++++++ populating measure set_run_period +++++++++++++++++++++++")
-    osw[:steps].append({"measure_dir_name": "set_run_period", "arguments": {}})
-    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "set_run_period", key, value) }
+    set_measure_argument = step_argument_setter(osw, "set_run_period")
 
     # Add args
     # -  __SKIP__
@@ -35,8 +57,7 @@ class OSWArgPopulator
 
   def self.populate_change_building_location_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("+++++++++++++++++++++ populating measure ChangeBuildingLocation +++++++++++++++++++++")
-    osw[:steps].append({"measure_dir_name": "ChangeBuildingLocation", "arguments": {}})
-    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "ChangeBuildingLocation", key, value) }
+    set_measure_argument = step_argument_setter(osw, "ChangeBuildingLocation")
 
     # -  __SKIP__
     set_measure_argument.call("__SKIP__", false)
@@ -57,8 +78,7 @@ class OSWArgPopulator
 
   def self.populate_create_bar_from_building_type_ratios_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("++++ populating measure create_bar_from_building_type_ratios ++++++++++++++")
-    osw[:steps].append({"measure_dir_name": "create_bar_from_building_type_ratios", "arguments": {}})
-    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "create_bar_from_building_type_ratios", key, value) }
+    set_measure_argument = step_argument_setter(osw, "create_bar_from_building_type_ratios")
 
 
 
@@ -127,8 +147,7 @@ class OSWArgPopulator
 
   def self.populate_create_typical_building_from_model_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("+++++ populating measure create_typical_building_from_model +++++++++++++++")
-    osw[:steps].append({"measure_dir_name": "create_typical_building_from_model", "arguments": {}})
-    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "create_typical_building_from_model", key, value) }
+    set_measure_argument = step_argument_setter(osw, "create_typical_building_from_model")
 
     # Add args
     # -  __SKIP__
@@ -187,8 +206,7 @@ class OSWArgPopulator
 
   def self.populate_set_lighting_loads_by_LPD_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("++++++++++++++++++++++ populating measure SetLightingLoadsByLPD ++++++++++++++++++++")
-    osw[:steps].append({"measure_dir_name": "SetLightingLoadsByLPD", "arguments": {}})
-    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "SetLightingLoadsByLPD", key, value) }
+    set_measure_argument = step_argument_setter(osw, "SetLightingLoadsByLPD")
 
     # skip if no total_installed_power or no usable floor area
     BOSS.BOSS_logger.info("|\t- gathering measure requirements...")
@@ -229,8 +247,7 @@ class OSWArgPopulator
 
   def self.populate_set_electric_equipment_loads_by_epd_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("+++++ populating measure set_electric_equipment_loads_by_epd ++++++++++++++")
-    osw[:steps].append({"measure_dir_name": "set_electric_equipment_loads_by_epd", "arguments": {}})
-    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "set_electric_equipment_loads_by_epd", key, value) }
+    set_measure_argument = step_argument_setter(osw, "set_electric_equipment_loads_by_epd")
 
     # skip if no total_weighted_average_load or no usable floor area
     BOSS.BOSS_logger.info("|\t- gathering measure requirements...")
@@ -269,8 +286,7 @@ class OSWArgPopulator
   end
 
   def self.populate_replace_baseline_windows_args(osw, bsync_reader)
-    osw[:steps].append({"measure_dir_name": "replace_baseline_windows", "arguments": {}})
-    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "replace_baseline_windows", key, value) }
+    set_measure_argument = step_argument_setter(osw, "replace_baseline_windows")
 
     # skip if no window_data
     window_data = bsync_reader.get_window_data
@@ -292,8 +308,7 @@ class OSWArgPopulator
 
   def self.populate_openstudio_results_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("+++++++++++++++++++++++++ populating measure openstudio_results +++++++++++++++++++++")
-    osw[:steps].append({"measure_dir_name": "openstudio_results", "arguments": {}})
-    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "openstudio_results", key, value) }
+    set_measure_argument = step_argument_setter(osw, "openstudio_results")
 
     # Add args
     # -  __SKIP__

@@ -255,9 +255,9 @@ module BOSS
       # Mapped steps go before the trailing openstudio_results reporting step.
       def build_scenario_osw(baseline_osw, mapped_steps, measure_paths, file_paths)
         scenario_osw = Marshal.load(Marshal.dump(baseline_osw))
-        steps = scenario_osw[:steps]
-        insert_at = steps.index { |step| step[:measure_dir_name] == 'openstudio_results' } || steps.length
-        steps.insert(insert_at, *mapped_steps)
+        mapped_steps.each do |step|
+          OSWArgPopulator.append_step(scenario_osw, step, before_measure: 'openstudio_results')
+        end
         scenario_osw[:measure_paths] = measure_paths.dup
         scenario_osw[:file_paths] = file_paths.dup
         scenario_osw
