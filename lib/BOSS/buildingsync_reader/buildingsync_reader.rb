@@ -176,20 +176,21 @@ module BOSS
     # tries to get total floor area from:
     #  1. /FloorAreas of building
     #  2. /FloorAreas of site
+    # The building is more specific than the site, so its value wins when both are present.
     def get_total_floor_area(num_indent=2)
-      # check site floor area
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking site for total floor area...")
-      site_floor_areas_xml = @site_xml.elements["#{@ns}FloorAreas"]
-      site_area = !site_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(site_floor_areas_xml, num_indent+1) : 0
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  site floor area is #{site_area}")
-      return site_area if site_area > 0
-
       # check building floor area
       BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking building for total floor area...")
       building_floor_areas_xml = @building_xml.elements["#{@ns}FloorAreas"]
       building_area = !building_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(building_floor_areas_xml, num_indent+1) : 0
       BOSS.BOSS_logger.info("#{"|\t"*num_indent}  building floor area is #{building_area}")
       return building_area if building_area > 0
+
+      # check site floor area
+      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking site for total floor area...")
+      site_floor_areas_xml = @site_xml.elements["#{@ns}FloorAreas"]
+      site_area = !site_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(site_floor_areas_xml, num_indent+1) : 0
+      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  site floor area is #{site_area}")
+      return site_area if site_area > 0
 
       # TODO: read sections
     end
