@@ -230,16 +230,16 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 11: Scenario OSW Writer API
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-11-12-scenario-osw-writer` branch, combined with PR 12
+- Status: Done
+- Delivered by: PR #20, merged into `scenario-workflow`, combined with PR 12
 - Scope: Add an API that writes baseline plus scenario OSWs for package scenarios with at least one mapped measure.
 - Done when: Generation tests show expected directories and skipped-scenario reporting.
 - Avoid: Writing OSWs for zero-mapped scenarios or changing baseline output.
 
 ### PR 12: Scenario Workflow Step Assembly
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-11-12-scenario-osw-writer` branch, combined with PR 11
+- Status: Done
+- Delivered by: PR #20, merged into `scenario-workflow`, combined with PR 11
 - Scope: Deep-copy baseline OSW and append mapped retrofit steps in a practical OpenStudio construction order, not BuildingSync `MeasureID` order. Make sure `buildingsync-measures-gem` measures are on the OSW `measure_paths`; `develop` already provides `config/external_measure_repos.yml` for this.
 - Ordering: Keep the order data-driven. For example, give each mapping step a `workflow_phase` in `scenario_measure_map.json` (envelope, then internal loads, then HVAC equipment, then controls and operations) and stable-sort mapped steps by phase, breaking ties by reference order. OpenStudio already runs model measures before EnergyPlus and reporting measures, so phases only order model measures.
 - Done when: OSW tests assert baseline steps plus expected mapped measure steps and arguments, and every mapped `measure_dir_name` resolves from the OSW `measure_paths`. A multi-measure package listed out of phase order produces phase-ordered steps. A test covers the LED mapping, whose `SetLightingLoadsByLPD` step also exists in the baseline, and proves the baseline step's arguments are unchanged.
@@ -247,8 +247,8 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 13: Generic OSW Step Helpers
 
-- Status: Planned
-- Delivered by: -
+- Status: In Progress
+- Delivered by: `scenario-workflow-13-generic-osw-step-helpers` branch
 - Scope: Centralize mapped step appending and `OpenStudio::Extension.set_measure_argument` use.
 - Done when: Tests prove boolean, numeric, and string arguments serialize correctly.
 - Avoid: Broad rewrites of baseline populator methods or unintended baseline JSON changes.
@@ -431,8 +431,8 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 
 ### PR 11 + PR 12: Scenario OSW Writer And Step Assembly
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-11-12-scenario-osw-writer` branch. Combined because the writer cannot be tested meaningfully without step assembly.
+- Status: Done
+- Delivered by: PR #20, merged into `scenario-workflow`. Combined because the writer cannot be tested meaningfully without step assembly.
 - Handoff: `BOSS::Boss.write_baseline_and_scenario_osws(xml_file_path, output_dir, epw_file_path, standard_to_be_used)` builds one reader, one baseline OSW, one mapper, and one `{ building_type:, hvac_system_type: }` context per file. It writes `baseline/in.osw` and `scenarios/<scenario_id>/in.osw`, and returns `{ baseline_osw_path:, scenario_results:, parser_warnings: }`. Each scenario result has `scenario_id`, `scenario_name`, `report_id`, `package_id`, `status` (`:written` or `:skipped`), `osw_path` (`nil` when skipped), `skipped_measure_ids`, and `warnings`. Parser warnings are also logged. `write_baseline_osw`, `run_baseline_osw`, and the CLI are unchanged.
 - Handoff: Scenario IDs become directory names. IDs must match `\A[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,62}[A-Za-z0-9_-])?\z` and must not be a Windows reserved device name. Otherwise the scenario is skipped with `:missing_scenario_output_id` or `:unsafe_scenario_output_id`. IDs that match case-insensitively skip every scenario in the group with `:conflicting_scenario_output_id`. Because allowed IDs are ASCII, no Unicode normalization is needed. Skipped-ID scenarios are not mapped.
 - Handoff: `scenario_measure_map.json` has a top-level `workflow_phases` array (`envelope`, `internal_loads`, `hvac_equipment`, `controls_operations`), and each step has a `workflow_phase`. The mapper validates that the phases are unique and non-blank and that every step uses a declared phase. It keeps `workflow_phase` on returned steps and exposes `#workflow_phases`. Maps without `workflow_phases` are still accepted, but their steps must not carry a phase. Plug-load controls are `controls_operations` and refrigeration replacement is `internal_loads`, even though both use `ReduceElectricEquipmentLoadsByPercentage`.
@@ -444,6 +444,17 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Verification: `bundle exec rubocop` on the changed files adds no new offenses except `Metrics/BlockLength` in specs and the existing `class << self` indentation in `boss.rb`.
 - Not run: Scenario simulations. These are PR 14/PR 18 scope.
 - Follow-up: PR 13 can reuse the private `build_scenario_osw` / `order_scenario_steps` helpers instead of adding new appending logic. PR 14 should run only OSWs with `status: :written`.
+
+### PR 13: Generic OSW Step Helpers
+
+- Status: In Progress
+- Delivered by: `scenario-workflow-13-generic-osw-step-helpers` branch
+- Handoff: `OSWArgPopulator.append_step(osw, step, before_measure: nil)` deep-copies a complete step, adds an empty `arguments` hash if missing, and inserts it before the first `before_measure` step (or appends). It returns the inserted step and never adds `name` or default arguments.
+- Handoff: `OSWArgPopulator.set_step_argument(step, name, value)` is the only `OpenStudio::Extension.set_measure_argument` call site. It passes a one-step workflow, so other steps with the same `measure_dir_name` (baseline `SetLightingLoadsByLPD`, repeated `ReduceElectricEquipmentLoadsByPercentage`) are untouched. Keys are symbolized by the extension; values are not coerced.
+- Handoff: The eight baseline populators only swap their append/lambda setup for `step_argument_setter`; calculations, defaults, logging, and argument order are unchanged. `build_scenario_osw` appends prebuilt mapped steps through `append_step`; mapped arguments still do not go through the setter.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit spec/tests/integration/scenario_osw_generation_spec.rb` - 136 examples, 0 failures. Baseline step characterizations in `boss_spec.rb` are unchanged.
+- Verification: `bundle exec rubocop` on the changed lib files drops from 156 to 100 offenses; none are new.
+- Not run: Baseline simulations (`write_and_run_osws_spec.rb`); generated baseline JSON is pinned by unit specs.
 
 ## Verification Commands
 

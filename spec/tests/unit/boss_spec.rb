@@ -479,6 +479,40 @@ RSpec.describe BOSS::Boss do
     end
   end
 
+  describe '.build_scenario_osw' do
+    let(:baseline_osw) do
+      {
+        steps: [
+          { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 1.0 } },
+          { measure_dir_name: 'openstudio_results', arguments: { __SKIP__: false, reg_monthly_details: true } }
+        ],
+        measure_paths: ['/baseline/measures'], file_paths: ['/baseline/files']
+      }
+    end
+    let(:mapped_steps) do
+      [
+        { measure_dir_name: 'ReduceElectricEquipmentLoadsByPercentage', arguments: { __SKIP__: false, elecequip_power_reduction_percent: 20.0 } },
+        { measure_dir_name: 'ReduceElectricEquipmentLoadsByPercentage', arguments: { __SKIP__: false, elecequip_power_reduction_percent: 5.0 } },
+        { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 0.6 } }
+      ]
+    end
+
+    it 'inserts repeated and baseline-named measures without sharing or overwriting arguments' do
+      baseline_before = Marshal.load(Marshal.dump(baseline_osw))
+      mapped_before = Marshal.load(Marshal.dump(mapped_steps))
+
+      first = described_class.send(:build_scenario_osw, baseline_osw, mapped_steps, ['/s/measures'], ['/s/files'])
+      second = described_class.send(:build_scenario_osw, baseline_osw, mapped_steps, ['/s/measures'], ['/s/files'])
+      first[:steps][1][:arguments][:elecequip_power_reduction_percent] = 99.0
+
+      expect(second[:steps]).to eq [baseline_before[:steps].first, *mapped_before, baseline_before[:steps].last]
+      expect(first[:steps][2]).to eq mapped_before[1]
+      expect(baseline_osw).to eq baseline_before
+      expect(mapped_steps).to eq mapped_before
+      expect(second.values_at(:measure_paths, :file_paths)).to eq [['/s/measures'], ['/s/files']]
+    end
+  end
+
   describe '.scenario_output_id_warnings' do
     before { allow(BOSS.BOSS_logger).to receive(:warn) }
 
