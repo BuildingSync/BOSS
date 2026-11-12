@@ -146,13 +146,49 @@ module BOSS
         raise StandardError, "BOSS.Boss.run_baseline_osw: #{error_message}"
       end
 
-      runner = OpenStudio::Extension::Runner.new(dirname = Dir.pwd, bundle_without = [], options = { run_simulations: true, verbose: false, num_parallel: 7, max_to_run: Float::INFINITY })
+      run_osw_paths([baseline_osw_path])
+    end
 
-      # run the baseline osm
-      return runner.run_osws([baseline_osw_path])
+    # Runs baseline/in.osw plus every :written scenario OSW from a
+    # write_baseline_and_scenario_osws result. The result, not the output directory,
+    # decides which scenarios run, so stale OSWs from earlier writes are never picked up.
+    #
+    # @param write_result [Hash] return value of write_baseline_and_scenario_osws
+    # @return [Array<String>] runner failure messages; empty when every OSW succeeded
+    def run_baseline_and_scenario_osws(write_result)
+      baseline_osw_path = write_result.is_a?(Hash) ? write_result[:baseline_osw_path] : nil
+      scenario_results = write_result.is_a?(Hash) ? write_result[:scenario_results] : nil
+      if !baseline_osw_path.is_a?(String) || baseline_osw_path.strip.empty? ||
+         !scenario_results.is_a?(Array) || !scenario_results.all?(Hash)
+        raise ArgumentError, 'Expected the result of write_baseline_and_scenario_osws with ' \
+                             ':baseline_osw_path and :scenario_results.'
+      end
+
+      if !File.file?(baseline_osw_path)
+        error_message = "this function requires #{baseline_osw_path}, which does not exist. " \
+                        'Create it with `write_baseline_and_scenario_osws` and try again.'
+        OpenStudio.logFree(OpenStudio::Error, 'BOSS.Boss.run_baseline_and_scenario_osws', error_message)
+        raise StandardError, "BOSS.Boss.run_baseline_and_scenario_osws: #{error_message}"
+      end
+
+      scenario_osw_paths = scenario_results.select { |scenario| scenario[:status] == :written }.filter_map do |scenario|
+        path = scenario[:osw_path]
+        next path if path.is_a?(String) && File.file?(path)
+
+        BOSS.BOSS_logger.warn('BOSS.Boss: Scenario OSW not found; scenario will not run ' \
+                              "(scenario_id: #{scenario[:scenario_id].inspect}, osw_path: #{path.inspect})")
+        nil
+      end
+
+      run_osw_paths(([baseline_osw_path] + scenario_osw_paths).uniq)
     end
 
       private
+
+      def run_osw_paths(osw_paths)
+        runner = OpenStudio::Extension::Runner.new(Dir.pwd, [], { run_simulations: true, verbose: false, num_parallel: 7, max_to_run: Float::INFINITY })
+        runner.run_osws(osw_paths)
+      end
 
     # Returns a new, unsaved baseline OSW hash for the given reader.
     def build_baseline_osw(bsync_reader)

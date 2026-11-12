@@ -541,4 +541,140 @@ RSpec.describe BOSS::Boss do
       )
     end
   end
+
+  describe 'running OSWs' do
+    let(:runner) { instance_double(OpenStudio::Extension::Runner, run_osws: []) }
+    let(:runner_options) { { run_simulations: true, verbose: false, num_parallel: 7, max_to_run: Float::INFINITY } }
+
+    before do
+      allow(OpenStudio::Extension::Runner).to receive(:new).and_return(runner)
+      allow(BOSS.BOSS_logger).to receive(:warn)
+      allow(OpenStudio).to receive(:logFree)
+    end
+
+    def touch_osw(*parts)
+      path = File.join(*parts, 'in.osw')
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, '{}')
+      path
+    end
+
+    def scenario(id, status, osw_path)
+      { scenario_id: id, status:, osw_path:, warnings: [] }
+    end
+
+    describe '.run_baseline_osw' do
+      it 'runs only baseline/in.osw with the existing runner options and returns failures' do
+        Dir.mktmpdir do |dir|
+          baseline = touch_osw(dir, 'baseline')
+          touch_osw(dir, 'scenarios', 'Scenario1')
+          allow(runner).to receive(:run_osws).and_return(['failed'])
+
+          expect(described_class.run_baseline_osw(dir)).to eq ['failed']
+          expect(OpenStudio::Extension::Runner).to have_received(:new).with(Dir.pwd, [], runner_options)
+          expect(runner).to have_received(:run_osws).with([baseline])
+        end
+      end
+
+      it 'raises the existing error without building a runner when the baseline is missing' do
+        Dir.mktmpdir do |dir|
+          expect { described_class.run_baseline_osw(dir) }
+            .to raise_error(StandardError, /BOSS\.Boss\.run_baseline_osw: .*write_baseline_osw/)
+          expect(OpenStudio::Extension::Runner).not_to have_received(:new)
+        end
+      end
+    end
+
+    describe '.run_baseline_and_scenario_osws' do
+      it 'is public with one argument' do
+        expect(described_class.method(:run_baseline_and_scenario_osws).arity).to eq 1
+        expect(described_class.private_methods).to include(:run_osw_paths)
+      end
+
+      it 'runs baseline then written scenarios in result order, skipping stale, missing, and duplicate paths' do
+        Dir.mktmpdir do |dir|
+          baseline = touch_osw(dir, 'baseline')
+          s2 = touch_osw(dir, 'scenarios', 'Scenario 2')
+          s1 = touch_osw(dir, 'scenarios', 'Scenario1')
+          stale = touch_osw(dir, 'scenarios', 'Stale')
+          touch_osw(dir, 'scenarios', 'Unlisted')
+          result = {
+            baseline_osw_path: baseline,
+            scenario_results: [
+              scenario('Scenario 2', :written, s2), scenario('Stale', :skipped, stale),
+              scenario('Scenario1', :written, s1), scenario('Dup', :written, s1),
+              scenario('Gone', :written, File.join(dir, 'scenarios', 'Gone', 'in.osw')),
+              scenario('Nil', :written, nil), scenario('Dir', :written, File.join(dir, 'scenarios'))
+            ],
+            parser_warnings: []
+          }
+          before = Marshal.load(Marshal.dump(result))
+
+          expect(described_class.run_baseline_and_scenario_osws(result)).to eq []
+          expect(runner).to have_received(:run_osws).with([baseline, s2, s1])
+          expect(BOSS.BOSS_logger).to have_received(:warn).with(/Gone/)
+          expect(BOSS.BOSS_logger).to have_received(:warn).with(/Nil/)
+          expect(BOSS.BOSS_logger).to have_received(:warn).with(/Dir/)
+          expect(result).to eq before
+        end
+      end
+
+      it 'runs only the baseline when no scenario was written' do
+        Dir.mktmpdir do |dir|
+          baseline = touch_osw(dir, 'baseline')
+          stale = touch_osw(dir, 'scenarios', 'Scenario4')
+          described_class.run_baseline_and_scenario_osws(
+            baseline_osw_path: baseline, scenario_results: [scenario('Scenario4', :skipped, stale)]
+          )
+          expect(runner).to have_received(:run_osws).with([baseline])
+        end
+      end
+
+      it 'raises before building a runner when the baseline file is missing' do
+        Dir.mktmpdir do |dir|
+          s1 = touch_osw(dir, 'scenarios', 'Scenario1')
+          result = { baseline_osw_path: File.join(dir, 'baseline', 'in.osw'), scenario_results: [scenario('Scenario1', :written, s1)] }
+
+          expect { described_class.run_baseline_and_scenario_osws(result) }
+            .to raise_error(StandardError, /run_baseline_and_scenario_osws: .*does not exist/)
+          expect(OpenStudio::Extension::Runner).not_to have_received(:new)
+        end
+      end
+
+      it 'rejects malformed write results' do
+        [nil, {}, { baseline_osw_path: ' ', scenario_results: [] }, { baseline_osw_path: 'x', scenario_results: [nil] }].each do |bad|
+          expect { described_class.run_baseline_and_scenario_osws(bad) }.to raise_error(ArgumentError)
+        end
+        expect(OpenStudio::Extension::Runner).not_to have_received(:new)
+      end
+
+      it 'propagates runner failures and exceptions' do
+        Dir.mktmpdir do |dir|
+          result = { baseline_osw_path: touch_osw(dir, 'baseline'), scenario_results: [] }
+          allow(runner).to receive(:run_osws).and_raise(RuntimeError, 'boom')
+          expect { described_class.run_baseline_and_scenario_osws(result) }.to raise_error(RuntimeError, 'boom')
+        end
+      end
+
+      it 'runs exactly the baseline and 12 written building_151 scenarios from a real write' do
+        stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir])
+        allow(BOSS::ExternalMeasureRepoManager.new).to receive(:resolved_measure_directories)
+          .with(include_scenario_only: true).and_return([external_measure_dir])
+        allow(described_class).to receive(:check_scenario_measures_exist)
+
+        Dir.mktmpdir do |dir|
+          stale = touch_osw(dir, 'scenarios', 'Scenario4')
+          unlisted = touch_osw(dir, 'scenarios', 'Unlisted')
+          result = described_class.write_baseline_and_scenario_osws(xml_path, dir, openstudio_weather_file_path, ASHRAE90_1)
+          written = result[:scenario_results].select { |s| s[:status] == :written }.map { |s| s[:osw_path] }
+
+          described_class.run_baseline_and_scenario_osws(result)
+
+          expect(written.length).to eq 12
+          expect(runner).to have_received(:run_osws).with([result[:baseline_osw_path], *written])
+          expect(written).not_to include(stale, unlisted)
+        end
+      end
+    end
+  end
 end

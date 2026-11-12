@@ -247,25 +247,25 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 13: Generic OSW Step Helpers
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-13-generic-osw-step-helpers` branch
+- Status: Done
+- Delivered by: PR #21, merged into `scenario-workflow`
 - Scope: Centralize mapped step appending and `OpenStudio::Extension.set_measure_argument` use.
 - Done when: Tests prove boolean, numeric, and string arguments serialize correctly.
 - Avoid: Broad rewrites of baseline populator methods or unintended baseline JSON changes.
 
 ### PR 14: Generalized Runner
 
-- Status: Planned
-- Delivered by: -
-- Scope: Run `baseline/in.osw` and `scenarios/**/in.osw` while keeping `run_baseline_osw` intact.
+- Status: In Progress
+- Delivered by: `scenario-workflow-14-generalized-runner` branch
+- Scope: Run `baseline/in.osw` and the `:written` scenario OSWs from a `write_baseline_and_scenario_osws` result while keeping `run_baseline_osw` intact. The writer result, not a `scenarios/**/in.osw` scan, selects scenarios, because the writer does not remove stale OSWs.
 - Done when: Tests or smoke runs show the correct OSW list and baseline-only compatibility.
-- Avoid: Running skipped or missing OSWs, or removing baseline-only behavior.
+- Avoid: Running skipped, stale, or missing OSWs, or removing baseline-only behavior.
 
 ### PR 15: CLI Command
 
 - Status: Planned
 - Delivered by: -
-- Scope: Add a Thor command for baseline plus package scenarios using existing output, weather, standard, and run options.
+- Scope: Add a Thor command for baseline plus package scenarios using existing output, weather, standard, and run options. Run mode passes the writer result to `run_baseline_and_scenario_osws`.
 - Done when: CLI help documents the command, write-only mode creates OSWs, and run mode invokes the generalized runner.
 - Avoid: Changing existing `write_baseline_osw` or `run_osw` behavior.
 
@@ -447,14 +447,28 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 
 ### PR 13: Generic OSW Step Helpers
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-13-generic-osw-step-helpers` branch
+- Status: Done
+- Delivered by: PR #21, merged into `scenario-workflow`
 - Handoff: `OSWArgPopulator.append_step(osw, step, before_measure: nil)` deep-copies a complete step, adds an empty `arguments` hash if missing, and inserts it before the first `before_measure` step (or appends). It returns the inserted step and never adds `name` or default arguments.
 - Handoff: `OSWArgPopulator.set_step_argument(step, name, value)` is the only `OpenStudio::Extension.set_measure_argument` call site. It passes a one-step workflow, so other steps with the same `measure_dir_name` (baseline `SetLightingLoadsByLPD`, repeated `ReduceElectricEquipmentLoadsByPercentage`) are untouched. Keys are symbolized by the extension; values are not coerced.
 - Handoff: The eight baseline populators only swap their append/lambda setup for `step_argument_setter`; calculations, defaults, logging, and argument order are unchanged. `build_scenario_osw` appends prebuilt mapped steps through `append_step`; mapped arguments still do not go through the setter.
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit spec/tests/integration/scenario_osw_generation_spec.rb` - 136 examples, 0 failures. Baseline step characterizations in `boss_spec.rb` are unchanged.
 - Verification: `bundle exec rubocop` on the changed lib files drops from 156 to 100 offenses; none are new.
 - Not run: Baseline simulations (`write_and_run_osws_spec.rb`); generated baseline JSON is pinned by unit specs.
+
+### PR 14: Generalized Runner
+
+- Status: In Progress
+- Delivered by: `scenario-workflow-14-generalized-runner` branch
+- Handoff: `BOSS::Boss.run_baseline_and_scenario_osws(write_result)` takes the symbol-keyed result of `write_baseline_and_scenario_osws`. It submits the baseline first, then every `status: :written` scenario `osw_path` in result order, deduplicated, in one `Runner#run_osws` call. It returns the runner's failure-message array; runner exceptions propagate.
+- Handoff: Skipped scenarios never run, even if an older `in.osw` exists. Scenario OSWs on disk but absent from the result are ignored; no directory is scanned. A `:written` entry whose path is missing, blank, or not a file is skipped with a `BOSS.BOSS_logger` warning.
+- Handoff: A malformed result raises `ArgumentError`; a missing baseline file logs an OpenStudio error and raises `StandardError`. Neither builds a runner. The input is not mutated.
+- Handoff: Baseline-first is submission order only. The runner still runs in parallel with the existing options, and scenarios do not wait on baseline success; each scenario OSW contains its own baseline construction steps.
+- Handoff: `run_baseline_osw` keeps its signature, error, runner options, and return value; both runners share the private `run_osw_paths`. The CLI is unchanged.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/boss_spec.rb` - 33 examples, 0 failures.
+- Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit spec/tests/integration/scenario_osw_generation_spec.rb` - 145 examples, 0 failures.
+- Verification: `bundle exec rubocop lib/BOSS/boss.rb spec/tests/unit/boss_spec.rb` adds only the existing `class << self` indentation pattern for the new public and private methods.
+- Not run: Baseline and scenario simulations. The runner is mocked in unit specs; scenario simulations are PR 18 scope.
 
 ## Verification Commands
 
