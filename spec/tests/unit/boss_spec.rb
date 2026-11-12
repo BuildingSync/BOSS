@@ -202,6 +202,24 @@ RSpec.describe BOSS::Boss do
       expect(second[:measure_paths]).not_to include('/mutated')
       expect(second[:file_paths]).not_to include('/mutated')
     end
+
+    it 'replaces create_typical HVAC with planned topology steps and adds scenario-only measure paths' do
+      stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir],
+                        scenario_only: ['/bsync/measures'])
+      steps = [{ measure_dir_name: 'apply_hvac_topology_to_zone_scope', arguments: { topology_measure: 'hvac_ptac' } },
+               { measure_dir_name: 'apply_standard_hvac_sizing_and_efficiency', arguments: {} }]
+      plan = BOSS::BaselineHvacPlanner::Plan.new(status: :topology, steps: steps, messages: [])
+      allow_any_instance_of(BOSS::BaselineHvacPlanner).to receive(:plan).and_return(plan)
+
+      osw = described_class.send(:build_baseline_osw, build_reader('all_measures_applied_example.xml'))
+      names = osw[:steps].map { |step| step[:measure_dir_name] }
+      typical = names.index('create_typical_building_from_model')
+
+      expect(osw[:steps][typical][:arguments][:add_hvac]).to be false
+      expect(names[typical + 1, 2]).to eq(steps.map { |step| step[:measure_dir_name] })
+      expect(names - steps.map { |step| step[:measure_dir_name] }).to eq(all_measures_steps.map { |step| step[:measure_dir_name] })
+      expect(osw[:measure_paths]).to include('/bsync/measures')
+    end
   end
 
   describe '.write_baseline_osw measure_paths ordering' do

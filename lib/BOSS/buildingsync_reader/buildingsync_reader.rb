@@ -399,6 +399,11 @@ module BOSS
       return aspect_ratio.to_f
     end
 
+    # @return [REXML::Element, nil] the facility HVACSystems element
+    def get_hvac_systems_xml
+      @facility_xml.elements["#{@ns}Systems/#{@ns}HVACSystems"]
+    end
+
     # get principal hvac system type
     # @return [String]
     def get_principal_HVAC_system_type

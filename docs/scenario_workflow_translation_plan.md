@@ -301,12 +301,16 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 14D: Baseline HVAC Integration
 
-- Status: Planned
+- Status: In progress
 - Delivered by: -
 - Depends on: PR 14A-14C.
 - Scope: For exact-match files, run `create_typical_building_from_model` with `add_hvac: false`, then the split topology `create` steps. `add_hvac: false` also skips standards sizing and HVAC efficiency steps, so this PR must account for them. Otherwise keep the current baseline and warn (missing or family-only HVAC data, or templates other than 90.1-2013/2016/2019).
 - Done when: Exact-match baselines simulate with the expected HVAC; fallback files keep their current steps and log why; baseline-only and scenario-writer baselines match.
 - Avoid: Mapping DOE Ref, older 90.1, or DEER templates to 90.1-2019, or adding HVAC on top of `add_hvac: true`.
+- Findings: with `add_hvac: false`, openstudio-standards 0.8.2 `create_typical_building_from_model` skips PRM sizing parameters, the sizing run, multizone VAV outdoor-air sizing, prototype HVAC assumptions, the HVAC efficiency standard, and NIST infiltration schedules; its night-cycle thermostat change then finds no managers. Topology measures do none of these. No existing measure runs this tail alone.
+- Decision: `BOSS::BaselineHvacPlanner` (`lib/BOSS/baseline_hvac_planner.rb`) plans topology HVAC only when every selector result is `:match`, binds to whole-building premises, the template is 90.1-2013/2016/2019, and there is exactly one conditioning configuration plus at most one ventilation configuration (ventilation only with zone-equipment topologies, since DOAS `create` rejects air-loop zones). Steps go right after `create_typical_building_from_model`: conditioning, then ventilation, then the new upstream measure `apply_standard_hvac_sizing_and_efficiency`, which mirrors the skipped tail. Otherwise `build_baseline_osw` keeps `add_hvac: true` and logs each reason. When topology steps are used, the baseline adds the scenario-only `buildingsync-measures-gem` measure path. Baseline-only and scenario writers share `build_baseline_osw`.
+- Current fixture effect: none. No v2.7.0 fixture links whole-building premises on deliveries, so every fixture falls back and existing baselines are unchanged.
+- Remaining: commit and merge `apply_standard_hvac_sizing_and_efficiency` upstream (its Minitest covers arguments and input checks only; the sizing path needs EnergyPlus) and bump the CI ref. Add an exact-match fixture and a baseline simulation check to meet "simulate with the expected HVAC".
 
 ### PR 14E: Scenario HVAC Mappings
 

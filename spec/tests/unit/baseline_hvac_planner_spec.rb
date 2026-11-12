@@ -1,0 +1,74 @@
+# frozen_string_literal: true
+
+# *******************************************************************************
+# OpenStudio(R), Copyright (c) Alliance for Energy Innovation, LLC.
+# BuildingSync(R), Copyright (c) Alliance for Energy Innovation, LLC.
+# See also https://github.com/BuildingSync/BOSS/blob/develop/LICENSE.md
+# *******************************************************************************
+
+require 'rexml/document'
+require 'BOSS/baseline_hvac_planner'
+
+RSpec.describe BOSS::BaselineHvacPlanner do
+  building = [{ type: 'Building', id: 'B-1' }]
+  result = lambda do |status: :match, measure: 'hvac_ptac', configuration: 'PTAC', group_key: [:delivery, 'D-1'], premises: building, messages: []|
+    BOSS::HvacTopologySelector::Result.new(status:, configuration:, measure:, hvac_system_id: 'HVAC-1',
+                                           record_ids: [], premises:, group_key:, messages:)
+  end
+  hvac_systems = REXML::Document.new('<HVACSystems/>').root
+
+  def plan_for(results, systems, template = '90.1-2019')
+    selector = instance_double(BOSS::HvacTopologySelector, select: results)
+    described_class.new(selector:).plan(systems, template)
+  end
+
+  it 'plans whole-building create steps, ventilation last, then sizing' do
+    doas = result.call(measure: 'hvac_doas', configuration: 'DOAS', group_key: [:other, 'O-1'])
+    plan = plan_for([doas, result.call, result.call(group_key: [:delivery, 'D-1'])], hvac_systems, '90.1-2016')
+
+    expect(plan.status).to eq(:topology)
+    expect(plan.steps.map { |step| step[:measure_dir_name] }).to eq(
+      ['apply_hvac_topology_to_zone_scope', 'apply_hvac_topology_to_zone_scope', 'apply_standard_hvac_sizing_and_efficiency']
+    )
+    expect(plan.steps.map { |step| step[:arguments][:topology_measure] }.compact).to eq(['hvac_ptac', 'hvac_doas'])
+    expect(plan.steps.map { |step| step[:arguments][:operation] }.compact).to eq(['create', 'create'])
+    expect(plan.steps.map { |step| step[:arguments][:standards_template] }.uniq).to eq(['90.1-2016'])
+  end
+
+  {
+    'no HVACSystems' => [[], nil, '90.1-2019', /No HVACSystems/],
+    'an unsupported template' => [[], :systems, '90.1-2010', /Template '90.1-2010'/],
+    'family-only data' => [[{ status: :missing_input, messages: ['Only family-level data'] }], :systems, '90.1-2019',
+                           /missing_input.*family-level/],
+    'two conditioning configurations' => [[{}, { group_key: [:delivery, 'D-2'] }], :systems, '90.1-2019',
+                                          /one conditioning configuration, found 2/],
+    'ventilation on air-loop HVAC' => [[{ measure: 'hvac_warm_air_furnace', configuration: 'Furnace' },
+                                        { measure: 'hvac_doas', configuration: 'DOAS', group_key: [:other, 'O-1'] }],
+                                       :systems, '90.1-2019', /DOAS cannot be added.*Furnace/],
+    'zone-linked premises' => [[{ premises: [{ type: 'ThermalZone', id: 'TZ-1' }] }], :systems, '90.1-2019',
+                               /only whole-building premises/]
+  }.each do |label, (specs, systems, template, message)|
+    it "falls back for #{label}" do
+      plan = plan_for(specs.map { |spec| result.call(**spec) }, systems && hvac_systems, template)
+
+      expect(plan.status).to eq(:fallback)
+      expect(plan.steps).to be_empty
+      expect(plan.messages.join("\n")).to match(message)
+    end
+  end
+
+  it 'plans a building-linked PTAC from BuildingSync XML' do
+    xml = '<HVACSystems><HVACSystem ID="HVAC-1"><HeatingAndCoolingSystems>' \
+          '<HeatingSources><HeatingSource ID="HS-1"><HeatingSourceType><ElectricResistance/></HeatingSourceType></HeatingSource></HeatingSources>' \
+          '<CoolingSources><CoolingSource ID="CS-1"><CoolingSourceType><DX><DXSystemType>Packaged terminal air conditioner (PTAC)</DXSystemType>' \
+          '<CondenserPlantIDs><CondenserPlantID IDref="CN-AIR"/></CondenserPlantIDs></DX></CoolingSourceType></CoolingSource></CoolingSources>' \
+          '<Deliveries><Delivery ID="D-1"><LinkedPremises><Building><LinkedBuildingID IDref="B-1"/></Building></LinkedPremises>' \
+          '<DeliveryType><ZoneEquipment/></DeliveryType><HeatingSourceID IDref="HS-1"/><CoolingSourceID IDref="CS-1"/></Delivery></Deliveries>' \
+          '</HeatingAndCoolingSystems><Plants><CondenserPlants><CondenserPlant ID="CN-AIR"><AirCooled/></CondenserPlant></CondenserPlants>' \
+          '</Plants></HVACSystem></HVACSystems>'
+    plan = described_class.new.plan(REXML::Document.new(xml).root, '90.1-2019')
+
+    expect(plan.status).to eq(:topology), plan.messages.join("\n")
+    expect(plan.steps.first[:arguments][:topology_measure]).to eq('hvac_ptac')
+  end
+end

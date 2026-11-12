@@ -145,7 +145,7 @@ class OSWArgPopulator
     BOSS.BOSS_logger.info("")
   end
 
-  def self.populate_create_typical_building_from_model_args(osw, bsync_reader)
+  def self.populate_create_typical_building_from_model_args(osw, bsync_reader, add_hvac: true)
     BOSS.BOSS_logger.info("+++++ populating measure create_typical_building_from_model +++++++++++++++")
     set_measure_argument = step_argument_setter(osw, "create_typical_building_from_model")
 
@@ -183,8 +183,8 @@ class OSWArgPopulator
     # add_thermostat
     # add_hvac
     BOSS.BOSS_logger.info("|\t- setting arg 'add_hvac'...")
-    BOSS.BOSS_logger.info("|\t  defaults to 'true'")
-    set_measure_argument.call("add_hvac", true)
+    BOSS.BOSS_logger.info("|\t  set to '#{add_hvac}'")
+    set_measure_argument.call("add_hvac", add_hvac)
     # add_refrigeration
     # modify_wkdy_op_hrs
     # wkdy_op_hrs_start_time
