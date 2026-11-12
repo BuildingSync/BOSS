@@ -278,12 +278,14 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 14B: HVAC Selection Contract
 
-- Status: Planned
+- Status: In progress
 - Delivered by: -
 - Depends on: Can run in parallel with PR 14A.
 - Scope: Read detailed HVAC data (sources, deliveries, plants, condensers, other HVAC systems, linked premises) and select topologies with the upstream guide's predicates. Shared by baseline and scenario workflows. Keep `get_principal_HVAC_system_type` for the existing baseline path.
 - Done when: Table-driven tests cover exact matches and separate results for missing input, conflicting input, mapping gaps, and configurations with no gem measure.
 - Avoid: Inferring topology from `MeasureName` or principal label alone, or dropping HVAC constituents silently.
+- Implementation: `BOSS::HvacTopologySelector` (`lib/BOSS/hvac_topology_selector.rb`) returns one result per conditioning `Delivery` and per `OtherHVACSystem`, with status `match`, `mapping_gap`, `not_mappable`, `missing_input`, `conflicting_input`, or `no_hvac`, the `LinkedPremises` references, and a `group_key` (delivery, cooling source, plant tuple, or other-system ID). Family-only `PrincipalHVACSystemType` data returns `missing_input`.
+- Deferred to later steps: guards comparing `Quantity` with zone counts and the premises-containment checks need the model crosswalk (PR 14C). Group-member consistency, zone-overlap checks, plant-binding limits, call ordering, and scenario `@Status` record selection belong to call construction (PR 14D/14E). `DuctSystems` checks are not implemented yet.
 
 ### PR 14C: Model Target Binding
 
