@@ -255,6 +255,55 @@ RSpec.describe 'BuildingSyncReader' do
   end
 
   describe 'get_total_floor_area should' do
+    def floor_areas(gross)
+      <<~XML
+        <FloorAreas>
+          <FloorArea>
+            <FloorAreaType>Gross</FloorAreaType>
+            <FloorAreaValue>#{gross}</FloorAreaValue>
+          </FloorArea>
+        </FloorAreas>
+      XML
+    end
+
+    def site_with_building(site_xml, building_xml)
+      wrap_in_site(<<~XML)
+        #{site_xml}
+        <Buildings>
+          <Building>
+            #{building_xml}
+          </Building>
+        </Buildings>
+      XML
+    end
+
+    it "prefer building over site when both have floor area" do
+      doc = REXML::Document.new site_with_building(floor_areas(20000), floor_areas(15000))
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      expect(buidingsync_reader.get_total_floor_area).to eq 15000
+    end
+
+    it "get from building" do
+      doc = REXML::Document.new site_with_building('', floor_areas(15000))
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      expect(buidingsync_reader.get_total_floor_area).to eq 15000
+    end
+
+    it "fall back to site when building has no floor area" do
+      doc = REXML::Document.new site_with_building(floor_areas(20000), '')
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      expect(buidingsync_reader.get_total_floor_area).to eq 20000
+    end
+
+    it "get from site when building is missing" do
+      doc = REXML::Document.new wrap_in_site(floor_areas(20000))
+      buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+
+      expect(buidingsync_reader.get_total_floor_area).to eq 20000
+    end
   end
 
   describe 'get_floor_above_grade should' do
