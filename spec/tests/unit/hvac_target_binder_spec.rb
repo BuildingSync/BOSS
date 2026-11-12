@@ -43,6 +43,25 @@ RSpec.describe BOSS::HvacTargetBinder do
     expect(binding.messages.first).to include('ThermalZone TZ-1')
   end
 
+  it 'binds any premises to explicit zone names as a JSON array' do
+    premises = [{ type: 'ThermalZone', id: 'TZ-1' }]
+    binding = binder.bind(match_result(premises), operation: 'replace', standards_template: '90.1-2019',
+                                                  zone_names: ['Office, East', 'Core', 'Core'])
+    expect(binding.status).to eq(:bound)
+    expect(binding.step[:arguments]).to eq(
+      topology_measure: 'hvac_ptac', operation: 'replace', zone_scope: 'explicit_zone_names',
+      zone_names_json: '["Office, East","Core"]', standards_template: '90.1-2019'
+    )
+  end
+
+  it 'rejects empty or blank explicit zone names' do
+    result = match_result([{ type: 'Building', id: 'B-1' }])
+    [[], [''], [nil]].each do |names|
+      expect { binder.bind(result, operation: 'create', standards_template: '90.1-2019', zone_names: names) }
+        .to raise_error(ArgumentError, /zone_names/)
+    end
+  end
+
   it 'returns missing input when no premises are linked' do
     binding = binder.bind(match_result([]), operation: 'create', standards_template: '90.1-2019')
     expect(binding.status).to eq(:missing_input)
@@ -71,7 +90,9 @@ RSpec.describe BOSS::HvacTargetBinder do
 
     doc = REXML::Document.new(File.read(xml_path))
     names = doc.get_elements('measure/arguments/argument/name').map(&:text)
-    expect(names).to eq(['topology_measure', 'operation', 'zone_scope', 'standards_template'])
+    expect(names).to eq(['topology_measure', 'operation', 'zone_scope', 'zone_names_json', 'standards_template'])
+    scopes = doc.get_elements("measure/arguments/argument[name='zone_scope']/choices/choice/value").map(&:text)
+    expect(scopes).to eq(['all_model_zones', 'explicit_zone_names'])
     topologies = doc.get_elements("measure/arguments/argument[name='topology_measure']/choices/choice/value").map(&:text)
     expect(topologies).to include('hvac_ptac', 'hvac_doas', 'hvac_vav_hw_reheat')
   end
