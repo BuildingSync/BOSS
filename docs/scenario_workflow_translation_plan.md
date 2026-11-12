@@ -289,12 +289,15 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 14C: Model Target Binding
 
-- Status: Planned
+- Status: In progress
 - Delivered by: -
 - Depends on: PR 14B.
 - Scope: Bind selected BuildingSync premises to the actual OpenStudio zone and equipment names the topology and modifier measures need. OSWs are written before the model exists, so this step must prove how names are resolved at run time. A new runtime measure belongs in `buildingsync-measures-gem`, not BOSS.
 - Done when: A model-based test proves exact zone/object binding, full shared-system scope for `replace`, and self-contained scenario OSWs.
 - Avoid: Placeholder or guessed names, blank `target_zone_names` defaults, or making scenarios wait on baseline runs.
+- Findings: BOSS baseline zones come from `create_bar_from_building_type_ratios` and carry no BuildingSync IDs, and no v2.7.0 fixture links premises on HVAC deliveries. A probe workflow showed that a measure cannot change a later OSW step's arguments at run time.
+- Decision: bind whole-building premises only (`Building`, `Site`, `Facility`). `BOSS::HvacTargetBinder` (`lib/BOSS/hvac_target_binder.rb`) emits an `apply_hvac_topology_to_zone_scope` step with `zone_scope = all_model_zones`; zone, space, and section links return `missing_input`. The new upstream measure resolves every model zone by exact name at run time and runs the selected topology measure, so `replace` always gets the full zone list and scenario OSWs do not depend on a baseline run. Its Minitest suite (`apply_hvac_topology_to_zone_scope_test.rb`) covers create, full-scope replace of a shared air loop, topology safety checks, and an empty model.
+- Remaining: commit and merge `apply_hvac_topology_to_zone_scope` upstream, then bump the CI checkout ref in `.github/workflows/ci.yml` (still `c7efd32`). Modifier object binding (`modify_existing_*`) waits for PR 14E. Quantity-versus-zone-count guards cannot run for whole-building scope before the model exists.
 
 ### PR 14D: Baseline HVAC Integration
 
