@@ -25,7 +25,7 @@ RSpec.describe BOSS::HvacTopologySelector do
   end
 
   electric_resistance = '<HeatingSourceType><ElectricResistance/></HeatingSourceType>'
-  gas_furnace = '<PrimaryFuel>Natural gas</PrimaryFuel><HeatingSourceType><Furnace><FurnaceType>Warm air</FurnaceType></Furnace></HeatingSourceType>'
+  gas_furnace = '<PrimaryFuel>Natural gas</PrimaryFuel><HeatingMedium>Air</HeatingMedium><HeatingSourceType><Furnace><FurnaceType>Warm air</FurnaceType></Furnace></HeatingSourceType>'
   hot_water = '<HeatingMedium>Hot water</HeatingMedium><HeatingSourceType><SourceHeatingPlantID IDref="HP-1"/></HeatingSourceType>'
   chilled_water = '<CoolingMedium>Chilled water</CoolingMedium><CoolingSourceType><CoolingPlantID IDref="CP-1"/></CoolingSourceType>'
   no_cooling = '<CoolingSourceType><NoCooling/></CoolingSourceType>'
@@ -110,6 +110,46 @@ RSpec.describe BOSS::HvacTopologySelector do
       expect(fcu.group_key).to eq([:plants, 'HP-1', 'CP-1', 'CN-TOWER'])
     end
 
+    it 'treats an empty FanBasedDistributionType as absent' do
+      args = exact_cases['Packaged Terminal Air Conditioner'][1]
+      delivery = '<ZoneEquipment><FanBased><FanBasedDistributionType/></FanBased></ZoneEquipment>'
+      expect(select_from(system_xml.call(**args, delivery:)).first.status).to eq(:match)
+    end
+
+    it 'accepts FurnaceType Other or absent and rejects other furnace types' do
+      args = exact_cases['Warm Air Furnace'][1]
+      other = select_from(system_xml.call(**args, heating: gas_furnace.sub('Warm air', 'Other'))).first
+      absent = select_from(system_xml.call(**args, heating: gas_furnace.sub('<FurnaceType>Warm air</FurnaceType>', ''))).first
+      steam = select_from(system_xml.call(**args, heating: gas_furnace.sub('Warm air', 'Steam'))).first
+      expect([other.status, absent.status, steam.status]).to eq([:match, :match, :conflicting_input])
+    end
+
+    it 'passes the heat pump backup fuel as a measure argument' do
+      args = exact_cases['Packaged Rooftop Heat Pump'][1]
+      electric = select_from(system_xml.call(**args)).first
+      gas = select_from(system_xml.call(**args, heating: heat_pump.call('Packaged Unitary', 'Natural gas'))).first
+      expect(electric.measure_arguments).to eq('supplemental_heating_fuel' => 'Electricity')
+      expect(gas).to have_attributes(status: :match, measure_arguments: { 'supplemental_heating_fuel' => 'NaturalGas' })
+    end
+
+    it 'treats CS/Quantity as a guard on VAV and VRF rows' do
+      ['VAV with Hot Water Reheat', 'VRF Terminal Unit'].each do |configuration|
+        args = exact_cases[configuration][1]
+        expect(select_from(system_xml.call(**args, cooling_extra: '')).first.status).to eq(:match)
+        expect(select_from(system_xml.call(**args, cooling_extra: '<Quantity>2</Quantity>')).first.status).to eq(:conflicting_input)
+      end
+    end
+
+    it 'reads an omitted condenser reference as air-cooled for packaged DX but not VRF' do
+      strip = ->(xml) { xml.sub(%r{<CondenserPlantIDs>.*?</CondenserPlantIDs>}, '') }
+      ['Packaged Terminal Air Conditioner', 'Packaged Rooftop Heat Pump', 'Packaged Rooftop VAV with Hot Water Reheat'].each do |configuration|
+        args = exact_cases[configuration][1]
+        expect(select_from(system_xml.call(**args, cooling: strip.call(args[:cooling]))).first.status).to eq(:match)
+      end
+      vrf = exact_cases['VRF Terminal Unit'][1]
+      expect(select_from(system_xml.call(**vrf, cooling: strip.call(vrf[:cooling]))).first.status).not_to eq(:match)
+    end
+
     it 'ignores namespace prefixes' do
       result = select_from(system_xml.call(**exact_cases['Packaged Terminal Air Conditioner'][1]), prefix: 'auc').first
       expect(result).to have_attributes(status: :match, measure: 'hvac_ptac')
@@ -166,7 +206,7 @@ RSpec.describe BOSS::HvacTopologySelector do
       ],
       'conflicting input for a required-absent element' => [
         :conflicting_input, nil,
-        { delivery: '<ZoneEquipment/>'.sub('/>', '><FanBased><FanBasedDistributionType/></FanBased></ZoneEquipment>'),
+        { delivery: fan_coil.call('Fan coil 4 pipe'),
           heating: electric_resistance, cooling: dx.call('Packaged terminal air conditioner (PTAC)') }
       ],
       'conflicting input for four-pipe fan coil with 2 pipe configuration' => [
