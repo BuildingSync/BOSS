@@ -17,7 +17,7 @@ module BOSS
   # guards need the model crosswalk and are left to later steps; results carry the
   # LinkedPremises references and a group_key for that work.
   class HvacTopologySelector
-    STATUSES = [:match, :mapping_gap, :not_mappable, :missing_input, :conflicting_input, :no_hvac].freeze
+    STATUSES = [:match, :mapping_gap, :not_mappable, :missing_input, :conflicting_input, :no_hvac, :integrated].freeze
 
     Result = Struct.new(:status, :configuration, :measure, :hvac_system_id, :record_ids, :premises,
                         :group_key, :messages, keyword_init: true)
@@ -447,6 +447,8 @@ module BOSS
       'Dedicated outdoor air system' => ['Dedicated Outdoor Air System', 'hvac_doas']
     }.freeze
 
+    INTEGRATED = ['Integrated with central air distribution', 'Integrated with local air distribution'].freeze
+
     def self.central_air_absent(x)
       ['ReheatPlantID', 'FanBased/FanBasedDistributionType'].select { |p| x.exists(x.a, p) }.map { |p| "A/#{p}" }
     end
@@ -481,6 +483,8 @@ module BOSS
 
       ventilation_links = Hash.new { |h, k| h[k] = [] }
       others.each do |other|
+        next unless _consumes_deliveries?(sys, other, index)
+
         Context.nodes(other, 'LinkedDeliveryIDs/LinkedDeliveryID').each do |link|
           ventilation_links[link.attributes['IDref']] << other.attributes['ID']
         end
@@ -490,6 +494,37 @@ module BOSS
         _select_delivery(sys, delivery, index)
       end
       results + others.map { |other| _select_other(sys, other, index, ventilation_links) }
+    end
+
+    # A record whose only content is MechanicalVentilation with VentilationType None or no type
+    # (optionally DemandControlVentilation) names no ventilation equipment.
+    def _ventilation_annotation?(other)
+      type_node = Context.nodes(other, 'OtherHVACType').first
+      return false if type_node.nil? || type_node.elements.to_a.map(&:name) != ['MechanicalVentilation']
+
+      mv = type_node.elements.to_a.first
+      (mv.elements.to_a.map(&:name) - ['VentilationType', 'DemandControlVentilation']).empty? &&
+        [[], ['None']].include?(Context.texts(mv, 'VentilationType'))
+    end
+
+    # Outdoor air delivered through the linked deliveries' own air system, not separate equipment.
+    def _integrated?(other)
+      texts = Context.texts(other, 'Integration')
+      !texts.empty? && texts.all? { |t| INTEGRATED.include?(t) }
+    end
+
+    def _explicit_no_hvac?(x)
+      !x.d.nil? && x.exists(x.h, 'NoHeating') && x.exists(x.c, 'NoCooling') && x.absent(x.d, 'DeliveryType')
+    end
+
+    # Ventilation annotations own their linked deliveries only when every one is explicitly
+    # unconditioned; otherwise those deliveries are still evaluated as conditioning deliveries.
+    def _consumes_deliveries?(sys, other, index)
+      return false if _integrated?(other)
+      return true unless _ventilation_annotation?(other)
+
+      ids = Context.nodes(other, 'LinkedDeliveryIDs/LinkedDeliveryID').map { |l| l.attributes['IDref'] }
+      !ids.empty? && ids.all? { |id| _explicit_no_hvac?(Context.new(sys, index[:delivery][id], index)) }
     end
 
     def _index(sys)
@@ -518,12 +553,12 @@ module BOSS
     def _select_delivery(sys, delivery, index)
       x = Context.new(sys, delivery, index)
       ids = [delivery, x.hs, x.cs].compact.map { |el| el.attributes['ID'] }
-      premises = _premises(delivery)
+      premises = _premises(delivery, sys)
 
       missing = []
       missing << 'Delivery/HeatingSourceID' if x.ref_ids(delivery, 'HeatingSourceID').empty?
       missing << 'Delivery/CoolingSourceID' if x.ref_ids(delivery, 'CoolingSourceID').empty?
-      missing << 'Delivery/LinkedPremises' if premises.empty?
+      missing << 'LinkedPremises on Delivery or HVACSystem' if premises.empty?
       return _result(:conflicting_input, sys.attributes['ID'], ids, premises, nil, x.conflicts) unless x.conflicts.empty?
       return _result(:missing_input, sys.attributes['ID'], ids, premises, nil, missing.map { |m| "Missing #{m}" }) unless missing.empty?
 
@@ -571,7 +606,7 @@ module BOSS
       other_id = other.attributes['ID']
       linked_ids = Context.nodes(other, 'LinkedDeliveryIDs/LinkedDeliveryID').map { |l| l.attributes['IDref'] }
       ids = [other_id] + linked_ids
-      premises = _premises(other)
+      premises = _premises(other, sys)
       type_node = Context.nodes(other, 'OtherHVACType').first
       equipment = type_node.nil? ? [] : type_node.elements.to_a.map(&:name)
 
@@ -600,6 +635,12 @@ module BOSS
                        configuration: configuration)
       end
 
+      if _integrated?(other)
+        return _result(:integrated, sys_id, ids, premises, nil,
+                       ['Outdoor air is integrated with the linked deliveries; they are selected as conditioning deliveries.'],
+                       configuration: 'Integrated outdoor air')
+      end
+
       return _result(:missing_input, sys_id, ids, premises, nil, ['Missing LinkedDeliveryIDs.']) if linked_ids.empty?
 
       shared = linked_ids.select { |id| ventilation_links[id].length > 1 }
@@ -617,6 +658,12 @@ module BOSS
           x.exists(x.h, 'NoHeating') && x.exists(x.c, 'NoCooling') && x.absent(x.d, 'DeliveryType')
         end
         return _result(:no_hvac, sys_id, ids, premises, nil, [], configuration: 'Explicitly no HVAC') if explicit
+
+        if _ventilation_annotation?(other) && contexts.none? { |x| _explicit_no_hvac?(x) }
+          return _result(:no_hvac, sys_id, ids, premises, nil,
+                         ['VentilationType None names no ventilation equipment; linked deliveries are selected as conditioning deliveries.'],
+                         configuration: 'No separate ventilation equipment')
+        end
 
         return _result(:missing_input, sys_id, ids, premises, nil,
                        ['VentilationType None requires linked deliveries with NoHeating, NoCooling, and no DeliveryType.'])
@@ -664,8 +711,14 @@ module BOSS
       end
     end
 
-    # LinkedPremises references as [{ type: 'ThermalZone', id: 'ThermalZone-1' }, ...].
-    def _premises(record)
+    # LinkedPremises references as [{ type: 'ThermalZone', id: 'ThermalZone-1' }, ...]. A record
+    # without its own links inherits the parent HVACSystem's links.
+    def _premises(record, sys)
+      own = _linked_premises(record)
+      own.empty? ? _linked_premises(sys) : own
+    end
+
+    def _linked_premises(record)
       Context.nodes(record, 'LinkedPremises').flat_map do |linked|
         linked.elements.to_a.flat_map do |premise_type|
           premise_type.elements.to_a.filter_map do |link|
