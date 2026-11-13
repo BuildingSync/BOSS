@@ -4,6 +4,8 @@ Gaps between BuildingSync audit data and the `buildingsync-measures-gem` [HVAC M
 
 Fixture paths are under `spec/files/v2.7.0/`.
 
+Status: gaps 1-7 were resolved upstream in buildingsync-measures-gem `e1b2f33` and adopted in `BOSS::HvacTopologySelector`. Gap 8 is open.
+
 ## Measure Gaps
 
 ### 1. Packaged unitary heat pump with gas backup
@@ -53,3 +55,11 @@ Fixture paths are under `spec/files/v2.7.0/`.
 - Guide: `zones(D)` and `zones(O)` come from the record's own links.
 - BOSS behavior: a record without its own links inherits the parent `HVACSystem` links.
 - Ask: add the fallback to the guide.
+
+## Open
+
+### 8. DX cooling source without a condenser plant
+
+- Data: `example-smalloffice-level2.xml`, all five DX sources (`DXSystemType = Packaged/unitary heat pump`) omit `CondenserPlantIDs`.
+- Guide: packaged and PTAC/PTHP/VRF rows require the DX condenser to resolve to an `AirCooled` condenser plant, so these deliveries identify no configuration.
+- Ask: decide whether a packaged or terminal DX source without a condenser reference may be treated as air-cooled, or confirm it stays missing input.
