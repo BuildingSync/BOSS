@@ -19,8 +19,10 @@ module BOSS
   class HvacTopologySelector
     STATUSES = [:match, :mapping_gap, :not_mappable, :missing_input, :conflicting_input, :no_hvac, :integrated].freeze
 
+    # measure_arguments holds topology-measure arguments derived from the data (beyond operation,
+    # zones, and template), e.g. { 'supplemental_heating_fuel' => 'NaturalGas' }.
     Result = Struct.new(:status, :configuration, :measure, :hvac_system_id, :record_ids, :premises,
-                        :group_key, :messages, keyword_init: true)
+                        :group_key, :messages, :measure_arguments, keyword_init: true)
 
     # Element accessors and predicates for one Delivery. Paths are '/'-separated local names,
     # so namespace prefixes do not matter.
@@ -156,6 +158,15 @@ module BOSS
           eq(a, 'ReheatSource', reheat)
       end
 
+      # An empty FanBasedDistributionType (no child elements) counts as absent.
+      def fan_based_distribution(el)
+        nodes(el, 'FanBased/FanBasedDistributionType').any? { |n| !n.elements.to_a.empty? }
+      end
+
+      def gas_air_furnace
+        exists(h, 'Furnace') && eq(hs, 'PrimaryFuel', 'Natural gas') && eq(hs, 'HeatingMedium', 'Air')
+      end
+
       def zone_equipment_only
         !z.nil? && ['Convection', 'Radiant', 'Other'].all? { |n| absent(z, n) }
       end
@@ -174,6 +185,9 @@ module BOSS
 
     ELECTRIC = 'Electricity'
     AIR_REFRIGERANT = ['Air', 'Refrigerant'].freeze
+    FURNACE_TYPES = ['Warm air', 'Other'].freeze
+    # HeatPumpBackupSystemFuel => hvac_packaged_rooftop_heat_pump supplemental_heating_fuel
+    BACKUP_FUELS = { 'Electricity' => 'Electricity', 'Natural gas' => 'NaturalGas' }.freeze
 
     # Exact rows and mapping-gap rows. :required, :absent, and :guards take a Context.
     # :absent and :guards return descriptions of failed checks.
@@ -184,7 +198,7 @@ module BOSS
           x.zone_equipment_only && x.exists(x.h, 'ElectricResistance') &&
             x.eq(x.dx, 'DXSystemType', 'Packaged terminal air conditioner (PTAC)') && x.air_cooled_dx
         },
-        absent: ->(x) { x.exists(x.z, 'FanBased/FanBasedDistributionType') ? ['Z/FanBased/FanBasedDistributionType'] : [] },
+        absent: ->(x) { x.fan_based_distribution(x.z) ? ['Z/FanBased/FanBasedDistributionType'] : [] },
         guards: lambda { |x|
           [
             ['HS/PrimaryFuel', x.guard(x.hs, 'PrimaryFuel', ELECTRIC)],
@@ -219,7 +233,7 @@ module BOSS
             x.eq(x.h, 'HeatPump/HeatPumpBackupSystemFuel', ELECTRIC) && x.absent(x.h, 'HeatPump/LinkedHeatingPlantID') &&
             x.eq(x.dx, 'DXSystemType', 'Packaged terminal heat pump (PTHP)') && x.air_cooled_dx
         },
-        absent: ->(x) { x.exists(x.z, 'FanBased/FanBasedDistributionType') ? ['Z/FanBased/FanBasedDistributionType'] : [] },
+        absent: ->(x) { x.fan_based_distribution(x.z) ? ['Z/FanBased/FanBasedDistributionType'] : [] },
         guards: lambda { |x|
           [
             ['HS/PrimaryFuel', x.guard(x.hs, 'PrimaryFuel', ELECTRIC)],
@@ -232,13 +246,13 @@ module BOSS
       {
         configuration: 'Packaged Rooftop Air Conditioner', measure: 'hvac_packaged_rooftop_ac', status: :match, group: :delivery,
         required: lambda { |x|
-          x.single_zone_cav && x.eq(x.h, 'Furnace/FurnaceType', 'Warm air') && x.eq(x.hs, 'PrimaryFuel', 'Natural gas') &&
+          x.single_zone_cav && x.gas_air_furnace &&
             x.eq(x.dx, 'DXSystemType', 'Packaged/unitary direct expansion/RTU') && x.air_cooled_dx
         },
         absent: ->(x) { central_air_absent(x) },
         guards: lambda { |x|
           [
-            ['HS/HeatingMedium', x.guard(x.hs, 'HeatingMedium', 'Air')],
+            ['H/Furnace/FurnaceType', x.guard(x.h, 'Furnace/FurnaceType', FURNACE_TYPES)],
             ['CS/PrimaryFuel', x.guard(x.cs, 'PrimaryFuel', ELECTRIC)],
             ['CS/CoolingMedium', x.guard(x.cs, 'CoolingMedium', AIR_REFRIGERANT)]
           ]
@@ -248,8 +262,12 @@ module BOSS
         configuration: 'Packaged Rooftop Heat Pump', measure: 'hvac_packaged_rooftop_heat_pump', status: :match, group: :delivery,
         required: lambda { |x|
           x.single_zone_cav && x.eq(x.h, 'HeatPump/HeatPumpType', 'Packaged Unitary') && x.heat_pump_shares_cs &&
-            x.eq(x.h, 'HeatPump/HeatPumpBackupSystemFuel', ELECTRIC) && x.absent(x.h, 'HeatPump/LinkedHeatingPlantID') &&
+            x.one_of(x.h, 'HeatPump/HeatPumpBackupSystemFuel', BACKUP_FUELS.keys) &&
+            x.absent(x.h, 'HeatPump/LinkedHeatingPlantID') &&
             x.eq(x.dx, 'DXSystemType', 'Packaged/unitary heat pump') && x.air_cooled_dx
+        },
+        arguments: lambda { |x|
+          { 'supplemental_heating_fuel' => BACKUP_FUELS[x.class.texts(x.h, 'HeatPump/HeatPumpBackupSystemFuel').first] }
         },
         absent: ->(x) { central_air_absent(x) },
         guards: lambda { |x|
@@ -267,15 +285,15 @@ module BOSS
         required: lambda { |x|
           x.multizone_vav('VAV terminal box not fan powered with reheat', 'Heating plant') && x.gas_hot_water_plant &&
             x.ref_ids(x.a, 'ReheatPlantID') == [x.hp.attributes['ID']] &&
-            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary direct expansion/RTU') && x.air_cooled_dx &&
-            x.eq(x.cs, 'Quantity', '1')
+            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary direct expansion/RTU') && x.air_cooled_dx
         },
-        absent: ->(x) { x.exists(x.a, 'FanBased/FanBasedDistributionType') ? ['A/FanBased/FanBasedDistributionType'] : [] },
+        absent: ->(x) { x.fan_based_distribution(x.a) ? ['A/FanBased/FanBasedDistributionType'] : [] },
         guards: lambda { |x|
           [
             ['HS/PrimaryFuel', x.guard(x.hs, 'PrimaryFuel', 'Natural gas')],
             ['CS/PrimaryFuel', x.guard(x.cs, 'PrimaryFuel', ELECTRIC)],
             ['CS/CoolingMedium', x.guard(x.cs, 'CoolingMedium', AIR_REFRIGERANT)],
+            ['CS/Quantity', x.quantity_guard(x.cs, 'Quantity')],
             ['plant quantities', x.plant_quantities_one(x.hp)]
           ]
         }
@@ -294,14 +312,14 @@ module BOSS
         configuration: 'VAV with Hot Water Reheat', measure: 'hvac_vav_hw_reheat', status: :match, group: :cooling_source,
         required: lambda { |x|
           x.multizone_vav('VAV terminal box not fan powered with reheat', 'Heating plant') && x.gas_hot_water_plant &&
-            x.ref_ids(x.a, 'ReheatPlantID') == [x.hp.attributes['ID']] && x.tower_chiller_plant &&
-            x.eq(x.cs, 'Quantity', '1')
+            x.ref_ids(x.a, 'ReheatPlantID') == [x.hp.attributes['ID']] && x.tower_chiller_plant
         },
-        absent: ->(x) { x.exists(x.a, 'FanBased/FanBasedDistributionType') ? ['A/FanBased/FanBasedDistributionType'] : [] },
+        absent: ->(x) { x.fan_based_distribution(x.a) ? ['A/FanBased/FanBasedDistributionType'] : [] },
         guards: lambda { |x|
           [
             ['HS/PrimaryFuel', x.guard(x.hs, 'PrimaryFuel', 'Natural gas')],
             ['CS/PrimaryFuel', x.guard(x.cs, 'PrimaryFuel', ELECTRIC)],
+            ['CS/Quantity', x.quantity_guard(x.cs, 'Quantity')],
             ['CP/PrimaryFuel', x.guard(x.cp, 'PrimaryFuel', ELECTRIC)],
             ['CP/CondenserType', x.guard(x.cp, 'CondenserType', 'Water Cooled')],
             ['plant quantities', x.plant_quantities_one(x.hp, x.cp, x.cn_chiller)]
@@ -319,11 +337,10 @@ module BOSS
       {
         configuration: 'Warm Air Furnace', measure: 'hvac_warm_air_furnace', status: :match, group: :delivery,
         required: lambda { |x|
-          x.single_zone_cav && x.eq(x.h, 'Furnace/FurnaceType', 'Warm air') && x.eq(x.hs, 'PrimaryFuel', 'Natural gas') &&
-            x.exists(x.c, 'NoCooling')
+          x.single_zone_cav && x.gas_air_furnace && x.exists(x.c, 'NoCooling')
         },
         absent: ->(x) { central_air_absent(x) },
-        guards: ->(x) { [['HS/HeatingMedium', x.guard(x.hs, 'HeatingMedium', 'Air')]] }
+        guards: ->(x) { [['H/Furnace/FurnaceType', x.guard(x.h, 'Furnace/FurnaceType', FURNACE_TYPES)]] }
       },
       {
         configuration: 'Water Loop Heat Pump', measure: 'hvac_water_loop_heat_pump', status: :mapping_gap, group: :delivery,
@@ -347,7 +364,7 @@ module BOSS
           x.zone_equipment_only && x.eq(x.fc, 'FanCoilType', 'VRF terminal units') && x.exists(x.h, 'HeatPump') &&
             x.heat_pump_shares_cs && x.absent(x.h, 'HeatPump/LinkedHeatingPlantID') &&
             x.absent(x.h, 'HeatPump/HeatPumpBackupSystemFuel') &&
-            x.eq(x.dx, 'DXSystemType', 'Variable refrigerant flow') && x.air_cooled_dx && x.eq(x.cs, 'Quantity', '1')
+            x.eq(x.dx, 'DXSystemType', 'Variable refrigerant flow') && x.air_cooled_dx
         },
         absent: ->(x) { x.exists(x.fc, 'HVACPipeConfiguration') ? ['FC/HVACPipeConfiguration'] : [] },
         guards: lambda { |x|
@@ -355,7 +372,8 @@ module BOSS
             ['HS/PrimaryFuel', x.guard(x.hs, 'PrimaryFuel', ELECTRIC)],
             ['CS/PrimaryFuel', x.guard(x.cs, 'PrimaryFuel', ELECTRIC)],
             ['HS/HeatingMedium', x.guard(x.hs, 'HeatingMedium', AIR_REFRIGERANT)],
-            ['CS/CoolingMedium', x.guard(x.cs, 'CoolingMedium', AIR_REFRIGERANT)]
+            ['CS/CoolingMedium', x.guard(x.cs, 'CoolingMedium', AIR_REFRIGERANT)],
+            ['CS/Quantity', x.quantity_guard(x.cs, 'Quantity')]
           ]
         }
       },
@@ -450,7 +468,9 @@ module BOSS
     INTEGRATED = ['Integrated with central air distribution', 'Integrated with local air distribution'].freeze
 
     def self.central_air_absent(x)
-      ['ReheatPlantID', 'FanBased/FanBasedDistributionType'].select { |p| x.exists(x.a, p) }.map { |p| "A/#{p}" }
+      failed = x.exists(x.a, 'ReheatPlantID') ? ['A/ReheatPlantID'] : []
+      failed << 'A/FanBased/FanBasedDistributionType' if x.fan_based_distribution(x.a)
+      failed
     end
 
     # @param hvac_systems [REXML::Element] an HVACSystems element (or any parent of HVACSystem elements)
@@ -598,7 +618,8 @@ module BOSS
       end
 
       _result(:match, sys.attributes['ID'], ids, premises, group_key, [],
-              configuration: rule[:configuration], measure: rule[:measure])
+              configuration: rule[:configuration], measure: rule[:measure],
+              measure_arguments: rule[:arguments] ? rule[:arguments].call(x) : {})
     end
 
     def _select_other(sys, other, index, ventilation_links)
@@ -729,9 +750,10 @@ module BOSS
       end
     end
 
-    def _result(status, sys_id, ids, premises, group_key, messages, configuration: nil, measure: nil)
+    def _result(status, sys_id, ids, premises, group_key, messages, configuration: nil, measure: nil, measure_arguments: {})
       Result.new(status: status, configuration: configuration, measure: measure, hvac_system_id: sys_id,
-                 record_ids: ids.compact.uniq, premises: premises, group_key: group_key, messages: messages)
+                 record_ids: ids.compact.uniq, premises: premises, group_key: group_key, messages: messages,
+                 measure_arguments: measure_arguments)
     end
   end
 end
