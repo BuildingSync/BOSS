@@ -39,7 +39,7 @@ RSpec.describe BOSS::BaselineHvacPlanner do
 
   {
     'no HVACSystems' => [[], nil, '90.1-2019', /No HVACSystems/],
-    'an unsupported template' => [[], :systems, '90.1-2010', /Template '90.1-2010'/],
+    'an unsupported template' => [[], :systems, 'DEER 2017', /Template 'DEER 2017'/],
     'family-only data' => [[{ status: :missing_input, messages: ['Only family-level data'] }], :systems, '90.1-2019',
                            /missing_input.*family-level/],
     'two conditioning configurations' => [[{}, { measure: 'hvac_pthp', group_key: [:delivery, 'D-2'] }], :systems, '90.1-2019',
@@ -110,17 +110,23 @@ RSpec.describe BOSS::BaselineHvacPlanner do
     expect(plan.messages.join("\n")).to match(/one conditioning configuration, found 2/)
   end
 
-  it 'plans topology HVAC for the 2012 small-office level 2 copy' do
-    path = File.expand_path('../../files/v2.7.0/example-smalloffice-level2-built-2012.xml', __dir__)
-    doc = REXML::Document.new(File.read(path), ignore_whitespace_nodes: :all)
-    reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
-    plan = described_class.new.plan(reader.get_hvac_systems_xml, reader.get_standard_template)
+  {
+    'example-smalloffice-level2.xml' => 'DOE Ref 1980-2004',
+    'example-smalloffice-level2-built-2012.xml' => '90.1-2013'
+  }.each do |file_name, template|
+    it "plans topology HVAC for #{file_name} with #{template}" do
+      path = File.expand_path("../../files/v2.7.0/#{file_name}", __dir__)
+      doc = REXML::Document.new(File.read(path), ignore_whitespace_nodes: :all)
+      reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+      plan = described_class.new.plan(reader.get_hvac_systems_xml, reader.get_standard_template)
 
-    expect(plan.status).to eq(:topology), plan.messages.join("\n")
-    step = plan.steps.first[:arguments]
-    expect(step).to include(topology_measure: 'hvac_packaged_rooftop_heat_pump', zone_scope: 'all_model_zones',
-                            standards_template: '90.1-2013',
-                            topology_arguments_json: '{"supplemental_heating_fuel":"NaturalGas"}')
-    expect(plan.steps.last[:measure_dir_name]).to eq('apply_standard_hvac_sizing_and_efficiency')
+      expect(plan.status).to eq(:topology), plan.messages.join("\n")
+      step = plan.steps.first[:arguments]
+      expect(step).to include(topology_measure: 'hvac_packaged_rooftop_heat_pump', zone_scope: 'all_model_zones',
+                              standards_template: template,
+                              topology_arguments_json: '{"supplemental_heating_fuel":"NaturalGas"}')
+      expect(plan.steps.last).to eq(measure_dir_name: 'apply_standard_hvac_sizing_and_efficiency',
+                                    arguments: { standards_template: template })
+    end
   end
 end

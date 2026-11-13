@@ -64,21 +64,27 @@ RSpec.describe 'BOSS' do
 
     end
 
-    it 'write and run a topology HVAC baseline. File: example-smalloffice-level2-built-2012.xml' do
-      xml_path = File.join(SPEC_FILES_DIR, 'v2.7.0', 'example-smalloffice-level2-built-2012.xml')
-      output_path = File.join(SPEC_OUTPUT_DIR, 'v2.7.0', 'write_and_run_baseline_osw', 'smalloffice_l2_topology')
+    {
+      'example-smalloffice-level2.xml' => ['smalloffice_l2_topology_doe_ref', 'DOE Ref 1980-2004'],
+      'example-smalloffice-level2-built-2012.xml' => ['smalloffice_l2_topology', '90.1-2013']
+    }.each do |file_name, (output_name, template)|
+      it "write and run a topology HVAC baseline. File: #{file_name}, Template: #{template}" do
+        xml_path = File.join(SPEC_FILES_DIR, 'v2.7.0', file_name)
+        output_path = File.join(SPEC_OUTPUT_DIR, 'v2.7.0', 'write_and_run_baseline_osw', output_name)
 
-      BOSS::Boss.write_baseline_osw(xml_path, output_path, nil, ASHRAE90_1)
-      BOSS::Boss.run_baseline_osw(output_path)
+        BOSS::Boss.write_baseline_osw(xml_path, output_path, nil, ASHRAE90_1)
+        BOSS::Boss.run_baseline_osw(output_path)
 
-      out_osw = JSON.parse(File.read(File.join(output_path, 'baseline', 'out.osw')), symbolize_names: true)
-      expect(out_osw[:completed_status]).to eq 'Success'
-      steps = out_osw[:steps].to_h { |step| [step[:measure_dir_name], step] }
-      expect(steps['create_typical_building_from_model'][:arguments][:add_hvac]).to be false
-      topology = steps['apply_hvac_topology_to_zone_scope']
-      expect(topology[:result][:step_result]).to eq 'Success'
-      expect(topology[:result][:step_final_condition]).to match(/Created \d+ PSZ-HP loops \(NaturalGas supplemental heat\).*90\.1-2013/)
-      expect(steps['apply_standard_hvac_sizing_and_efficiency'][:result][:step_result]).to eq 'Success'
+        out_osw = JSON.parse(File.read(File.join(output_path, 'baseline', 'out.osw')), symbolize_names: true)
+        expect(out_osw[:completed_status]).to eq 'Success'
+        steps = out_osw[:steps].to_h { |step| [step[:measure_dir_name], step] }
+        expect(steps['create_typical_building_from_model'][:arguments][:add_hvac]).to be false
+        topology = steps['apply_hvac_topology_to_zone_scope']
+        expect(topology[:result][:step_result]).to eq 'Success'
+        expect(topology[:result][:step_final_condition])
+          .to match(/Created \d+ PSZ-HP loops \(NaturalGas supplemental heat\).*#{Regexp.escape(template)}/)
+        expect(steps['apply_standard_hvac_sizing_and_efficiency'][:result][:step_result]).to eq 'Success'
+      end
     end
   end
 end

@@ -30,7 +30,8 @@ module BOSS
     }.freeze
     PLANT_LOOP_TYPES = ['Heating', 'Cooling', 'Condenser'].freeze
     WHOLE_BUILDING_PREMISES = ['Building', 'Site', 'Facility'].freeze
-    STANDARDS_TEMPLATES = ['90.1-2013', '90.1-2016', '90.1-2019'].freeze
+    STANDARDS_TEMPLATES = ['DOE Ref Pre-1980', 'DOE Ref 1980-2004', '90.1-2004', '90.1-2007', '90.1-2010',
+                           '90.1-2013', '90.1-2016', '90.1-2019'].freeze
     OPERATIONS = ['create', 'replace'].freeze
 
     Binding = Struct.new(:status, :step, :messages, keyword_init: true)
