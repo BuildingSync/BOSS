@@ -194,14 +194,27 @@ RSpec.describe BOSS::HvacTopologySelector do
       body = system_xml.call(**exact_cases['Packaged Terminal Air Conditioner'][1]).sub('CN-AIR"><AirCooled/>', 'HS-1"><AirCooled/>')
       expect(select_from(body).first.status).to eq(:conflicting_input)
     end
+
+    it 'inherits HVACSystem linked premises when the delivery has none' do
+      system_premises = '<LinkedPremises><Building><LinkedBuildingID IDref="B-1"/></Building></LinkedPremises>'
+      body = system_xml.call(**exact_cases['Packaged Terminal Air Conditioner'][1], delivery_premises: '') + system_premises
+      expect(select_from(body).first).to have_attributes(status: :match, premises: [{ type: 'Building', id: 'B-1' }])
+    end
+
+    it 'keeps delivery linked premises over HVACSystem linked premises' do
+      system_premises = '<LinkedPremises><Building><LinkedBuildingID IDref="B-1"/></Building></LinkedPremises>'
+      body = system_xml.call(**exact_cases['Packaged Terminal Air Conditioner'][1]) + system_premises
+      expect(select_from(body).first.premises).to eq([{ type: 'ThermalZone', id: 'TZ-1' }])
+    end
   end
 
   describe 'ventilation and other HVAC systems' do
     ventilation_delivery = "<Delivery ID=\"D-V\">#{premises}<DeliveryType>#{single_zone_cav}</DeliveryType>" \
                            '<HeatingSourceID IDref="HS-V"/><CoolingSourceID IDref="CS-V"/></Delivery>'
-    other = lambda do |type_xml, links: '<LinkedDeliveryIDs><LinkedDeliveryID IDref="D-V"/></LinkedDeliveryIDs>'|
+    other = lambda do |type_xml, links: '<LinkedDeliveryIDs><LinkedDeliveryID IDref="D-V"/></LinkedDeliveryIDs>',
+                       integration: 'Stand-alone'|
       "<OtherHVACSystems><OtherHVACSystem ID=\"O-1\"><OtherHVACType>#{type_xml}</OtherHVACType>" \
-        "<Integration>Stand-alone</Integration>#{links}</OtherHVACSystem></OtherHVACSystems>"
+        "<Integration>#{integration}</Integration>#{links}</OtherHVACSystem></OtherHVACSystems>"
     end
     mechanical = ->(type) { "<MechanicalVentilation><VentilationType>#{type}</VentilationType></MechanicalVentilation>" }
 
@@ -245,6 +258,38 @@ RSpec.describe BOSS::HvacTopologySelector do
       links = '<LinkedDeliveryIDs><LinkedDeliveryID IDref="D-MISSING"/></LinkedDeliveryIDs>'
       results = select_from(with_ventilation.call(other.call(mechanical.call('Supply only'), links: links)))
       expect(results.last.status).to eq(:conflicting_input)
+    end
+
+    conditioning_link = '<LinkedDeliveryIDs><LinkedDeliveryID IDref="D-1"/></LinkedDeliveryIDs>'
+
+    it 'still selects conditioning deliveries linked by VentilationType None' do
+      results = select_from(with_ventilation.call(other.call(mechanical.call('None'), links: conditioning_link)))
+      expect(results.map(&:status)).to eq([:match, :missing_input, :no_hvac])
+      expect(results.first.measure).to eq('hvac_ptac')
+      expect(results.last.configuration).to eq('No separate ventilation equipment')
+    end
+
+    it 'still selects conditioning deliveries linked by an untyped ventilation record' do
+      untyped = '<MechanicalVentilation><DemandControlVentilation>false</DemandControlVentilation></MechanicalVentilation>'
+      results = select_from(with_ventilation.call(other.call(untyped, links: conditioning_link)))
+      expect(results.first).to have_attributes(status: :match, measure: 'hvac_ptac')
+      expect(results.last.status).to eq(:missing_input)
+    end
+
+    it 'still selects conditioning deliveries linked by integrated outdoor air records' do
+      integrated = other.call(mechanical.call('Supply only'), links: conditioning_link,
+                                                              integration: 'Integrated with central air distribution')
+      second = integrated[%r{<OtherHVACSystem .*</OtherHVACSystem>}].sub('O-1', 'O-2')
+      results = select_from(with_ventilation.call(integrated.sub('</OtherHVACSystems>', "#{second}</OtherHVACSystems>")))
+      expect(results.map(&:status)).to eq([:match, :missing_input, :integrated, :integrated])
+      expect(results.first.measure).to eq('hvac_ptac')
+    end
+
+    it 'lets VentilationType None own explicitly unconditioned deliveries' do
+      body = with_ventilation.call(other.call(mechanical.call('None'))).sub("<DeliveryType>#{single_zone_cav}</DeliveryType>", '')
+      results = select_from(body)
+      expect(results.map(&:status)).to eq([:match, :no_hvac])
+      expect(results.last.configuration).to eq('Explicitly no HVAC')
     end
   end
 end
