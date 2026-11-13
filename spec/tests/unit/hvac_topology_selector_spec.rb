@@ -140,6 +140,16 @@ RSpec.describe BOSS::HvacTopologySelector do
       end
     end
 
+    it 'reads an omitted condenser reference as air-cooled for packaged DX but not VRF' do
+      strip = ->(xml) { xml.sub(%r{<CondenserPlantIDs>.*?</CondenserPlantIDs>}, '') }
+      ['Packaged Terminal Air Conditioner', 'Packaged Rooftop Heat Pump', 'Packaged Rooftop VAV with Hot Water Reheat'].each do |configuration|
+        args = exact_cases[configuration][1]
+        expect(select_from(system_xml.call(**args, cooling: strip.call(args[:cooling]))).first.status).to eq(:match)
+      end
+      vrf = exact_cases['VRF Terminal Unit'][1]
+      expect(select_from(system_xml.call(**vrf, cooling: strip.call(vrf[:cooling]))).first.status).not_to eq(:match)
+    end
+
     it 'ignores namespace prefixes' do
       result = select_from(system_xml.call(**exact_cases['Packaged Terminal Air Conditioner'][1]), prefix: 'auc').first
       expect(result).to have_attributes(status: :match, measure: 'hvac_ptac')
