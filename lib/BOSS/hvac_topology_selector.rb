@@ -133,6 +133,12 @@ module BOSS
         !cn.nil? && exists(cn, 'AirCooled') && absent(cn, 'AirCooled/EvaporativelyCooledCondenser')
       end
 
+      # Packaged and terminal DX units are self-contained air-cooled units, so an omitted
+      # condenser reference reads as air-cooled. VRF keeps the strict air_cooled_dx check.
+      def packaged_air_cooled_dx
+        absent(dx, 'CondenserPlantIDs') || air_cooled_dx
+      end
+
       def gas_hot_water_plant
         eq(hs, 'HeatingMedium', 'Hot water') && !hp.nil? &&
           eq(hp, 'Boiler/BoilerType', 'Hot water') && eq(hp, 'PrimaryFuel', 'Natural gas')
@@ -196,7 +202,7 @@ module BOSS
         configuration: 'Packaged Terminal Air Conditioner', measure: 'hvac_ptac', status: :match, group: :delivery,
         required: lambda { |x|
           x.zone_equipment_only && x.exists(x.h, 'ElectricResistance') &&
-            x.eq(x.dx, 'DXSystemType', 'Packaged terminal air conditioner (PTAC)') && x.air_cooled_dx
+            x.eq(x.dx, 'DXSystemType', 'Packaged terminal air conditioner (PTAC)') && x.packaged_air_cooled_dx
         },
         absent: ->(x) { x.fan_based_distribution(x.z) ? ['Z/FanBased/FanBasedDistributionType'] : [] },
         guards: lambda { |x|
@@ -231,7 +237,7 @@ module BOSS
         required: lambda { |x|
           x.zone_equipment_only && x.eq(x.h, 'HeatPump/HeatPumpType', 'Packaged Terminal') && x.heat_pump_shares_cs &&
             x.eq(x.h, 'HeatPump/HeatPumpBackupSystemFuel', ELECTRIC) && x.absent(x.h, 'HeatPump/LinkedHeatingPlantID') &&
-            x.eq(x.dx, 'DXSystemType', 'Packaged terminal heat pump (PTHP)') && x.air_cooled_dx
+            x.eq(x.dx, 'DXSystemType', 'Packaged terminal heat pump (PTHP)') && x.packaged_air_cooled_dx
         },
         absent: ->(x) { x.fan_based_distribution(x.z) ? ['Z/FanBased/FanBasedDistributionType'] : [] },
         guards: lambda { |x|
@@ -247,7 +253,7 @@ module BOSS
         configuration: 'Packaged Rooftop Air Conditioner', measure: 'hvac_packaged_rooftop_ac', status: :match, group: :delivery,
         required: lambda { |x|
           x.single_zone_cav && x.gas_air_furnace &&
-            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary direct expansion/RTU') && x.air_cooled_dx
+            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary direct expansion/RTU') && x.packaged_air_cooled_dx
         },
         absent: ->(x) { central_air_absent(x) },
         guards: lambda { |x|
@@ -264,7 +270,7 @@ module BOSS
           x.single_zone_cav && x.eq(x.h, 'HeatPump/HeatPumpType', 'Packaged Unitary') && x.heat_pump_shares_cs &&
             x.one_of(x.h, 'HeatPump/HeatPumpBackupSystemFuel', BACKUP_FUELS.keys) &&
             x.absent(x.h, 'HeatPump/LinkedHeatingPlantID') &&
-            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary heat pump') && x.air_cooled_dx
+            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary heat pump') && x.packaged_air_cooled_dx
         },
         arguments: lambda { |x|
           { 'supplemental_heating_fuel' => BACKUP_FUELS[x.class.texts(x.h, 'HeatPump/HeatPumpBackupSystemFuel').first] }
@@ -285,7 +291,7 @@ module BOSS
         required: lambda { |x|
           x.multizone_vav('VAV terminal box not fan powered with reheat', 'Heating plant') && x.gas_hot_water_plant &&
             x.ref_ids(x.a, 'ReheatPlantID') == [x.hp.attributes['ID']] &&
-            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary direct expansion/RTU') && x.air_cooled_dx
+            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary direct expansion/RTU') && x.packaged_air_cooled_dx
         },
         absent: ->(x) { x.fan_based_distribution(x.a) ? ['A/FanBased/FanBasedDistributionType'] : [] },
         guards: lambda { |x|
@@ -305,7 +311,7 @@ module BOSS
         required: lambda { |x|
           x.multizone_vav('VAV terminal box fan powered with reheat', 'Local electric resistance') &&
             x.exists(x.h, 'ElectricResistance') &&
-            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary direct expansion/RTU') && x.air_cooled_dx
+            x.eq(x.dx, 'DXSystemType', 'Packaged/unitary direct expansion/RTU') && x.packaged_air_cooled_dx
         }
       },
       {
