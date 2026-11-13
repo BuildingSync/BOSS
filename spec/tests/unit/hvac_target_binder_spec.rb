@@ -62,6 +62,13 @@ RSpec.describe BOSS::HvacTargetBinder do
     end
   end
 
+  it 'forwards selector measure arguments as topology_arguments_json' do
+    result = match_result([{ type: 'Building', id: 'B-1' }], measure: 'hvac_packaged_rooftop_heat_pump')
+    result.measure_arguments = { 'supplemental_heating_fuel' => 'NaturalGas' }
+    binding = binder.bind(result, operation: 'create', standards_template: '90.1-2019')
+    expect(binding.step[:arguments][:topology_arguments_json]).to eq('{"supplemental_heating_fuel":"NaturalGas"}')
+  end
+
   it 'returns missing input when no premises are linked' do
     binding = binder.bind(match_result([]), operation: 'create', standards_template: '90.1-2019')
     expect(binding.status).to eq(:missing_input)
@@ -90,7 +97,8 @@ RSpec.describe BOSS::HvacTargetBinder do
 
     doc = REXML::Document.new(File.read(xml_path))
     names = doc.get_elements('measure/arguments/argument/name').map(&:text)
-    expect(names).to eq(['topology_measure', 'operation', 'zone_scope', 'zone_names_json', 'standards_template'])
+    expect(names).to eq(['topology_measure', 'operation', 'zone_scope', 'zone_names_json', 'standards_template',
+                         'topology_arguments_json'])
     scopes = doc.get_elements("measure/arguments/argument[name='zone_scope']/choices/choice/value").map(&:text)
     expect(scopes).to eq(['all_model_zones', 'explicit_zone_names'])
     topologies = doc.get_elements("measure/arguments/argument[name='topology_measure']/choices/choice/value").map(&:text)
