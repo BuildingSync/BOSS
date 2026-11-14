@@ -8,6 +8,7 @@
 
 require 'rexml/document'
 require 'BOSS/baseline_hvac_planner'
+require 'BOSS/scenario_hvac_planner'
 require 'BOSS/boss_logger'
 require 'BOSS/buildingsync_reader/buildingsync_reader'
 
@@ -128,5 +129,17 @@ RSpec.describe BOSS::BaselineHvacPlanner do
       expect(plan.steps.last).to eq(measure_dir_name: 'apply_standard_hvac_sizing_and_efficiency',
                                     arguments: { standards_template: template })
     end
+  end
+
+  it 'plans the baseline without proposed scenario HVACSystems' do
+    path = File.expand_path('../../files/v2.7.0/example-smalloffice-level2-hvac-retrofits.xml', __dir__)
+    doc = REXML::Document.new(File.read(path), ignore_whitespace_nodes: :all)
+    hvac_systems = REXML::XPath.first(doc, "//*[local-name()='HVACSystems']")
+
+    expect(described_class.new.plan(hvac_systems, 'DOE Ref 1980-2004').status).to eq(:fallback)
+    plan = described_class.new.plan(hvac_systems, 'DOE Ref 1980-2004',
+                                    exclude_system_ids: BOSS::ScenarioHvacPlanner.proposed_system_ids(hvac_systems))
+    expect(plan.status).to eq(:topology), plan.messages.join("\n")
+    expect(plan.steps.first[:arguments]).to include(topology_measure: 'hvac_packaged_rooftop_heat_pump', operation: 'create')
   end
 end

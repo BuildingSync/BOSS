@@ -35,8 +35,11 @@ module BOSS
 
     # @param hvac_systems [REXML::Element, nil] the facility HVACSystems element
     # @param standards_template [String] baseline create_typical template
+    # @param operation [String] binder operation for the conditioning step; ventilation is always created
+    # @param include_system_ids [Array<String>, nil] when given, only these HVACSystems are planned
+    # @param exclude_system_ids [Array<String>] HVACSystems left out, such as proposed scenario systems
     # @return [Plan] :topology with ordered OSW steps, or :fallback with the reasons
-    def plan(hvac_systems, standards_template)
+    def plan(hvac_systems, standards_template, operation: 'create', include_system_ids: nil, exclude_system_ids: [])
       return fallback(['No HVACSystems in the facility.']) if hvac_systems.nil?
 
       if !HvacTargetBinder::STANDARDS_TEMPLATES.include?(standards_template)
@@ -44,7 +47,10 @@ module BOSS
                          "(#{HvacTargetBinder::STANDARDS_TEMPLATES.join(', ')})."])
       end
 
-      results = @selector.select(hvac_systems)
+      results = @selector.select(hvac_systems).select do |result|
+        (include_system_ids.nil? || include_system_ids.include?(result.hvac_system_id)) &&
+          !exclude_system_ids.include?(result.hvac_system_id)
+      end
       return fallback(['No HVACSystem records.']) if results.empty?
 
       unmatched = results.reject { |result| result.status == :match }
@@ -65,9 +71,8 @@ module BOSS
       end
       return fallback(problems) if !problems.empty?
 
-      bindings = (conditioning + ventilation).map do |result|
-        [result, @binder.bind(result, operation: 'create', standards_template:)]
-      end
+      bindings = conditioning.map { |result| [result, @binder.bind(result, operation:, standards_template:)] } +
+                 ventilation.map { |result| [result, @binder.bind(result, operation: 'create', standards_template:)] }
       unbound = bindings.reject { |_, binding| binding.status == :bound }
       return fallback(unbound.map { |result, binding| describe(result, binding.status, binding.messages) }) if !unbound.empty?
 
@@ -75,23 +80,19 @@ module BOSS
       Plan.new(status: :topology, steps: bindings.map { |_, binding| binding.step } + [sizing_step], messages: [])
     end
 
-    private
-
-    def merge(members, hvac_systems)
-      merged = members.first.dup
-      merged.premises = members.flat_map { |member| member.premises || [] }.uniq
-      building_id = covered_building_id(merged.premises, hvac_systems)
-      merged.premises = [{ type: 'Building', id: building_id }] if building_id
-      merged
+    # @return [Array<Hash>] premises, or one Building premise when Section links cover the building
+    def self.normalize_premises(premises, document)
+      building_id = covered_building_id(premises, document)
+      building_id ? [{ type: 'Building', id: building_id }] : premises
     end
 
     # @return [String, nil] the building ID when every premise is a Section of the one
     #   building and they include its 'Whole building' section or all of its other
     #   non-empty sections
-    def covered_building_id(premises, hvac_systems)
+    def self.covered_building_id(premises, document)
       return nil if premises.empty? || !premises.all? { |premise| premise[:type] == 'Section' }
 
-      buildings = REXML::XPath.match(hvac_systems.document, "//*[local-name()='Building'][@ID]")
+      buildings = REXML::XPath.match(document, "//*[local-name()='Building'][@ID]")
       return nil if buildings.length != 1
 
       sections = REXML::XPath.match(buildings.first, "*[local-name()='Sections']/*[local-name()='Section'][@ID]")
@@ -107,6 +108,15 @@ module BOSS
         section.elements.empty? || linked.include?(section.attributes['ID'])
       end
       whole_linked || parts_linked ? buildings.first.attributes['ID'] : nil
+    end
+
+    private
+
+    def merge(members, hvac_systems)
+      merged = members.first.dup
+      merged.premises = self.class.normalize_premises(members.flat_map { |member| member.premises || [] }.uniq,
+                                                      hvac_systems.document)
+      merged
     end
 
     def fallback(messages)

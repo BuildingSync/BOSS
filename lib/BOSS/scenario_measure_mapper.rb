@@ -37,10 +37,19 @@ module BOSS
 
     # @param measure [Hash] symbol-keyed measure hash from the reader
     # @param context [Hash, nil] { building_type:, hvac_system_type: } used by conditional_arguments
+    # @param hvac_planner [ScenarioHvacPlanner, nil] tried before the JSON map; :not_hvac falls through
     # @return [Hash] { measure_id:, steps: [ { measure_dir_name:, arguments: {} } ], warnings: [] }
-    def map_measure(measure, context: {})
+    def map_measure(measure, context: {}, hvac_planner: nil)
       context ||= {}
       raise ArgumentError, 'context must be a Hash' if !context.is_a?(Hash)
+
+      hvac = hvac_planner&.plan(measure)
+      if hvac&.status == :mapped
+        return { measure_id: measure[:measure_id], steps: hvac.steps, warnings: [] }
+      elsif hvac&.status == :unmapped
+        return _unmapped_result(measure, :hvac_measure_unmapped,
+                                "HVAC measure cannot be mapped: #{hvac.messages.join(' ')}")
+      end
 
       technology_category_key = _lookup_key(measure[:technology_category_element_name], measure[:measure_name])
       system_category_key = _lookup_key(measure[:system_category_affected], measure[:measure_name])
@@ -84,9 +93,10 @@ module BOSS
     # @param scenario [Hash] one record from BuildingSyncReader#get_package_measure_scenarios
     # @param measures [Hash] BuildingSyncReader#get_measures, keyed by measure ID
     # @param context [Hash, nil] forwarded to #map_measure
+    # @param hvac_planner [ScenarioHvacPlanner, nil] forwarded to #map_measure
     # @return [Hash] { scenario_id:, scenario_name:, report_id:, package_id:,
     #   status: :writable | :skipped, steps: [], skipped_measure_ids: [], warnings: [] }
-    def map_package_scenario(scenario, measures, context: {})
+    def map_package_scenario(scenario, measures, context: {}, hvac_planner: nil)
       context ||= {}
       raise ArgumentError, 'scenario must be a Hash' if !scenario.is_a?(Hash)
       raise ArgumentError, 'measures must be a Hash' if !measures.is_a?(Hash)
@@ -116,7 +126,7 @@ module BOSS
           next
         end
 
-        result = map_measure(measure, context:)
+        result = map_measure(measure, context:, hvac_planner:)
         steps.concat(result[:steps])
         skipped_measure_ids << measure_idref if result[:steps].empty?
         warnings.concat(result[:warnings].map { |warning| warning.merge(scenario_context) })
