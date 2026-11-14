@@ -12,6 +12,7 @@ require 'BOSS/osw_arg_populator'
 require 'BOSS/external_measure_repo_manager'
 require 'BOSS/scenario_measure_mapper'
 require 'BOSS/baseline_hvac_planner'
+require 'BOSS/scenario_hvac_planner'
 
 require 'openstudio/common_measures'
 require 'openstudio/model_articulation'
@@ -59,7 +60,14 @@ module BOSS
     # @return [Hash] { baseline_osw_path:, scenario_results: [ { scenario_id:, scenario_name:,
     #   report_id:, package_id:, status: :written | :skipped, osw_path:, skipped_measure_ids:,
     #   warnings: } ], parser_warnings: }
-    def write_baseline_and_scenario_osws(xml_file_path, output_dir, epw_file_path, standard_to_be_used)
+    # @param hvac_retrofit_template [String, nil] standards template for scenario HVAC retrofits;
+    #   defaults to the baseline template
+    def write_baseline_and_scenario_osws(xml_file_path, output_dir, epw_file_path, standard_to_be_used,
+                                         hvac_retrofit_template: nil)
+      if !hvac_retrofit_template.nil? && !HvacTargetBinder::STANDARDS_TEMPLATES.include?(hvac_retrofit_template)
+        raise ArgumentError, "hvac_retrofit_template must be one of #{HvacTargetBinder::STANDARDS_TEMPLATES.join(', ')}"
+      end
+
       if !File.exist?(xml_file_path)
         message = "File '#{xml_file_path}' does not exist"
         OpenStudio.logFree(OpenStudio::Error, 'BOSS.write_baseline_and_scenario_osws', message)
@@ -93,6 +101,8 @@ module BOSS
       measures = bsync_reader.get_measures
       scenarios = bsync_reader.get_package_measure_scenarios
       id_warnings = scenario_output_id_warnings(scenarios)
+      hvac_planner = ScenarioHvacPlanner.new(bsync_reader.get_hvac_systems_xml, bsync_doc,
+                                             hvac_retrofit_template || bsync_reader.get_standard_template)
 
       scenario_results = []
       scenario_osws = []
@@ -107,7 +117,7 @@ module BOSS
           next
         end
 
-        mapped = mapper.map_package_scenario(scenario, measures, context:)
+        mapped = mapper.map_package_scenario(scenario, measures, context:, hvac_planner:)
         result = mapped.slice(:scenario_id, :scenario_name, :report_id, :package_id)
                        .merge(status: :skipped, osw_path: nil,
                               skipped_measure_ids: mapped[:skipped_measure_ids], warnings: mapped[:warnings])
@@ -202,7 +212,9 @@ module BOSS
       OSWArgPopulator::populate_change_building_location_args(baseline_osw, bsync_reader)
 
       OSWArgPopulator::populate_create_bar_from_building_type_ratios_args(baseline_osw, bsync_reader)
-      hvac_plan = BaselineHvacPlanner.new.plan(bsync_reader.get_hvac_systems_xml, bsync_reader.get_standard_template)
+      hvac_systems = bsync_reader.get_hvac_systems_xml
+      hvac_plan = BaselineHvacPlanner.new.plan(hvac_systems, bsync_reader.get_standard_template,
+                                               exclude_system_ids: ScenarioHvacPlanner.proposed_system_ids(hvac_systems))
       OSWArgPopulator::populate_create_typical_building_from_model_args(baseline_osw, bsync_reader,
                                                                         add_hvac: !hvac_plan.topology?)
       if hvac_plan.topology?

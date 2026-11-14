@@ -4,6 +4,7 @@
     "envelope",
     "internal_loads",
     "hvac_equipment",
+    "hvac_modifiers",
     "controls_operations"
   ],
   "lookup_order": [

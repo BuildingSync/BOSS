@@ -86,5 +86,31 @@ RSpec.describe 'BOSS' do
         expect(steps['apply_standard_hvac_sizing_and_efficiency'][:result][:step_result]).to eq 'Success'
       end
     end
+
+    it 'write and run HVAC retrofit scenarios. File: example-smalloffice-level2-hvac-retrofits.xml' do
+      xml_path = File.join(SPEC_FILES_DIR, 'v2.7.0', 'example-smalloffice-level2-hvac-retrofits.xml')
+      output_path = File.join(SPEC_OUTPUT_DIR, 'v2.7.0', 'hvac_retrofits')
+
+      result = BOSS::Boss.write_baseline_and_scenario_osws(xml_path, output_path, nil, ASHRAE90_1)
+      by_id = result[:scenario_results].to_h { |scenario| [scenario[:scenario_id], scenario] }
+      hvac_ids = ['Scenario-POM-HVAC-RTU', 'Scenario-POM-HVAC-COP', 'Scenario-POM-HVAC-VRF', 'Scenario-POM-HVAC-mixed']
+      hvac_ids.each { |id| expect(by_id.fetch(id)[:status]).to eq(:written), by_id.fetch(id)[:warnings].inspect }
+
+      failures = BOSS::Boss.run_baseline_and_scenario_osws(result)
+      expect(failures).to be_empty, failures.inspect
+
+      out = ->(path) { JSON.parse(File.read(File.join(File.dirname(path), 'out.osw')), symbolize_names: true) }
+      expect(out.call(result[:baseline_osw_path])[:completed_status]).to eq 'Success'
+      hvac_ids.each do |id|
+        out_osw = out.call(by_id.fetch(id)[:osw_path])
+        expect(out_osw[:completed_status]).to eq('Success'), id
+      end
+
+      rtu = out.call(by_id.fetch('Scenario-POM-HVAC-RTU')[:osw_path])[:steps]
+                .select { |step| step[:measure_dir_name] == 'apply_hvac_topology_to_zone_scope' }.last
+      expect(rtu[:arguments]).to include(topology_measure: 'hvac_packaged_rooftop_ac', operation: 'replace')
+      mixed = out.call(by_id.fetch('Scenario-POM-HVAC-mixed')[:osw_path])[:steps].map { |step| step[:measure_dir_name] }
+      expect(mixed).to include('SetLightingLoadsByLPD', 'apply_hvac_modifier_to_object_scope')
+    end
   end
 end

@@ -11,6 +11,7 @@ require 'tempfile'
 require 'BOSS/constants'
 require 'BOSS/buildingsync_reader/buildingsync_reader'
 require 'BOSS/scenario_measure_mapper'
+require 'BOSS/scenario_hvac_planner'
 
 RSpec.describe 'ScenarioMeasureMapper' do
   def mapper_fixture_path(*parts)
@@ -575,6 +576,27 @@ RSpec.describe 'ScenarioMeasureMapper' do
       end
     end
 
+    it 'use the HVAC planner before the JSON map' do
+      reader = fixture_reader('example-smalloffice-level2-hvac-retrofits.xml')
+      doc = REXML::Document.new(File.read(mapper_fixture_path('v2.7.0', 'example-smalloffice-level2-hvac-retrofits.xml')),
+                                ignore_whitespace_nodes: :all)
+      hvac_planner = BOSS::ScenarioHvacPlanner.new(REXML::XPath.first(doc, "//*[local-name()='HVACSystems']"), doc,
+                                                   'DOE Ref 1980-2004')
+      scenarios = reader.get_package_measure_scenarios.to_h { |scenario| [scenario[:scenario_id], scenario] }
+      map = ->(id) { mapper.map_package_scenario(scenarios.fetch(id), reader.get_measures, hvac_planner:) }
+
+      expect(map.call('Scenario-POM-HVAC-RTU')[:steps].map { |step| step[:measure_dir_name] })
+        .to eq ['apply_hvac_topology_to_zone_scope', 'apply_standard_hvac_sizing_and_efficiency']
+      expect(map.call('Scenario-POM-HVAC-mixed')[:steps].map { |step| step[:workflow_phase] })
+        .to eq ['hvac_modifiers', 'hvac_modifiers', 'internal_loads']
+      expect(mapper.map_package_scenario(scenarios.fetch('Scenario-POM-HVAC-RTU'), reader.get_measures)[:status]).to eq :skipped
+
+      hvac_planner = BOSS::ScenarioHvacPlanner.new(REXML::XPath.first(doc, "//*[local-name()='HVACSystems']"), doc, 'DEER 2017')
+      result = mapper.map_package_scenario(scenarios.fetch('Scenario-POM-HVAC-RTU'), reader.get_measures, hvac_planner:)
+      expect(result[:status]).to eq :skipped
+      expect(result[:warnings].first).to include(code: :hvac_measure_unmapped, message: /DEER 2017/)
+    end
+
     it 'raise ArgumentError for invalid inputs' do
       expect { mapper.map_package_scenario(package_scenario([]), measures, context: 'x') }.to raise_error(ArgumentError, /context/)
       expect { mapper.map_package_scenario(nil, measures) }.to raise_error(ArgumentError, /scenario must be a Hash/)
@@ -658,7 +680,7 @@ RSpec.describe 'ScenarioMeasureMapper' do
     end
 
     it 'expose the shipped workflow phases in order' do
-      expect(mapper.workflow_phases).to eq ['envelope', 'internal_loads', 'hvac_equipment', 'controls_operations']
+      expect(mapper.workflow_phases).to eq ['envelope', 'internal_loads', 'hvac_equipment', 'hvac_modifiers', 'controls_operations']
     end
 
     it 'allow legacy maps without workflow phases' do
