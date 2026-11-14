@@ -89,7 +89,7 @@ RSpec.describe 'BOSS' do
 
     it 'write and run HVAC retrofit scenarios. File: example-smalloffice-level2-hvac-retrofits.xml' do
       xml_path = File.join(SPEC_FILES_DIR, 'v2.7.0', 'example-smalloffice-level2-hvac-retrofits.xml')
-      output_path = File.join(SPEC_OUTPUT_DIR, 'v2.7.0', 'hvac_retrofits')
+      output_path = File.join(SPEC_OUTPUT_DIR, 'v2.7.0', 'example-smalloffice-level2-hvac-retrofits')
 
       result = BOSS::Boss.write_baseline_and_scenario_osws(xml_path, output_path, nil, ASHRAE90_1)
       by_id = result[:scenario_results].to_h { |scenario| [scenario[:scenario_id], scenario] }
