@@ -50,6 +50,8 @@ module BOSS
       OSWArgPopulator::populate_set_electric_equipment_loads_by_epd_args(baseline_osw, bsync_reader)
       OSWArgPopulator::populate_replace_baseline_windows_args(baseline_osw, bsync_reader)
 
+      OSWArgPopulator::populate_modify_envelope_insulation(baseline_osw, bsync_reader)
+
       OSWArgPopulator::populate_openstudio_results_args(baseline_osw, bsync_reader)
 
       # Gather extension-derived paths (typically gem-based measures/files) from ObjectSpace.
