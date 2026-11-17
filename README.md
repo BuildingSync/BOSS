@@ -175,8 +175,34 @@ bundle exec boss write_baseline_osw "spec/files/v2.7.0/L100_Audit-1.0.0.xml" -o 
 
 ## Tests
 
-To run the tests you can use the Rake task:
+Integration tests need the external measures installed first:
+
+```bash
+bundle exec rake measures:install_external
+```
+
+Run the full suite (unit + all integration simulations):
 
 ```bash
 bundle exec rake
 ```
+
+Run only the fast unit tests:
+
+```bash
+bundle exec rspec spec/tests/unit
+```
+
+Run the integration smoke subset (2 simulations):
+
+```bash
+BOSS_SMOKE=1 bundle exec rspec spec/tests/integration
+```
+
+Run one shard of the full integration suite (here shard 0 of 4, as in CI):
+
+```bash
+BOSS_SHARD=0 BOSS_SHARDS=4 bundle exec rspec spec/tests/integration
+```
+
+In CI, unit tests run on every pull request. The full integration suite (4 parallel shards) also runs on every pull request, except documentation-only changes (`*.md`, `docs/`, `LICENSE`) or pull requests labeled `skip-integration`. It always runs on pushes to `develop`, tags, nightly, and on manual dispatch.

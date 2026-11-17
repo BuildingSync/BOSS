@@ -2,29 +2,119 @@ name: Continuous Integration
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches:
       - "develop"
     tags:
       - '*'
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  tests:
-    name: Tests
+  unit:
+    name: unit
     container: nrel/openstudio:3.10.0
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+    - name: Cache gems
+      uses: actions/cache@v4
+      with:
+        path: .bundle/install
+        key: gems-${{ runner.os }}-os3.10.0-${{ hashFiles('Gemfile.lock', '*.gemspec') }}
     - name: Setup
       run: |
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
         gem install bundler -v 2.4.10
         bundle config set --local path "$GITHUB_WORKSPACE/.bundle/install"
         bundle install
+    - name: Run Unit Tests
+      run: bundle exec rspec spec/tests/unit --profile 10
+
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+    - name: Checkout Code
+      if: github.event_name == 'pull_request'
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Check for non-documentation changes
+      id: diff
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          echo "code=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        # Documentation-only paths; anything else counts as a code change.
+        code_files=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA" \
+          | grep -Ev '(\.md$|^docs/|^LICENSE)' || true)
+        if [ -n "$code_files" ]; then
+          echo "code=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "code=false" >> "$GITHUB_OUTPUT"
+        fi
+
+  integration:
+    name: integration (shard ${{ matrix.shard }})
+    needs: changes
+    if: >-
+      needs.changes.outputs.code == 'true' &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-integration')
+    container: nrel/openstudio:3.10.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      BOSS_SHARD: ${{ matrix.shard }}
+      BOSS_SHARDS: '4'
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+    - name: Cache gems
+      uses: actions/cache@v4
+      with:
+        path: .bundle/install
+        key: gems-${{ runner.os }}-os3.10.0-${{ hashFiles('Gemfile.lock', '*.gemspec') }}
+    - name: Cache external measures
+      uses: actions/cache@v4
+      with:
+        path: vendor/external_measures
+        key: ext-measures-${{ hashFiles('config/external_measure_repos.yml') }}
+    - name: Setup
+      run: |
+        git config --global --add safe.directory '*'
+        gem install bundler -v 2.4.10
+        bundle config set --local path "$GITHUB_WORKSPACE/.bundle/install"
+        bundle install
         bundle exec rake measures:install_external
-    - name: Run Tests
-      run: bundle exec rspec
+    - name: Run Integration Tests
+      run: bundle exec rspec spec/tests/integration --profile 10
+    - name: Upload output on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: integration-output-shard-${{ matrix.shard }}
+        path: spec/output
