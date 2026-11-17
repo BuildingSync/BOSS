@@ -14,6 +14,8 @@ local_measure_roots:
 # - name: local checkout folder name under vendor/external_measures
 # - url: git repository URL
 # - ref: pinned tag/branch/commit to checkout
+# - local_path (instead of url/ref): existing local checkout, relative to this file.
+#   BOSS uses it in place and never runs Git against it; a missing path is an error.
 # - measure_roots: one or more paths inside the repo that contain measure directories
 # - scenario_only (optional, default false): when true, measure roots are added only to
 #   scenario workflows (scenarios/<id>/in.osw), never to baseline/in.osw
@@ -28,11 +30,10 @@ repos:
       - measures
       - resources/measures
 
-  # BuildingSync measures used by scenario mappings (modify_envelope_insulation).
-  # Pinned to a commit on develop.
+  # BuildingSync measures used by scenario mappings. Not released as a gem, so BOSS
+  # loads the sibling checkout ../buildingsync-measures-gem (CI pins its commit).
   - name: buildingsync-measures-gem
-    url: https://github.com/BuildingSync/buildingsync-measures-gem.git
-    ref: c40c2ed65952a1c3bfe82bf1daa542ce5e1ee8d6
+    local_path: ../../buildingsync-measures-gem
     measure_roots:
       - lib/measures
     scenario_only: true

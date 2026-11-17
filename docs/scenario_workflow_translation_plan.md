@@ -1,6 +1,6 @@
 # Scenario Workflow Translation Plan
 
-This plan tracks the work needed for BOSS to translate BuildingSync package scenarios into OpenStudio workflows. Roadmap PRs land on the `scenario-workflow` integration branch. Merge `scenario-workflow` into `develop` once the feature is usable end to end (after PR 15). Future PRs should stay small and follow the roadmap below.
+This plan tracks the work needed for BOSS to translate BuildingSync package scenarios into OpenStudio workflows. Roadmap PRs land on the `scenario-workflow` integration branch. Merge `scenario-workflow` into `develop` once the feature is usable end to end (after PR 14A-14E and PR 15-18). Future PRs should stay small and follow the roadmap below.
 
 ## Goal
 
@@ -14,6 +14,7 @@ The first scenario release should:
 - Write `baseline/in.osw` plus one scenario OSW for each package scenario with at least one mapped measure.
 - Run baseline and scenario OSWs through `OpenStudio::Extension::Runner`.
 - Warn about skipped or unmapped measures without failing the whole translation.
+- Build baseline HVAC and map HVAC retrofits with the split `buildingsync-measures-gem` HVAC measures when BuildingSync data supports an exact match (PR 14A-14E). Otherwise keep the existing baseline HVAC path and warn.
 
 ## Out Of Scope For The First Release
 
@@ -110,6 +111,12 @@ Measure source order for new mappings:
 1. `../buildingsync-measures-gem` custom BuildingSync measures, when one fits the BuildingSync measure semantics.
 2. OpenStudio measure gems declared in `BOSS.gemspec`.
 3. If neither has an applicable measure, add one to `buildingsync-measures-gem` instead of BOSS.
+
+`buildingsync-measures-gem` is one measure source among several. ComStock, `openstudio-common-measures`, `openstudio-ee`, `openstudio-model-articulation`, and `openstudio-standards` stay supported. Pick the measure that fits the BuildingSync semantics; do not move existing mappings to `buildingsync-measures-gem` unless the new measure is verified as a better fit.
+
+`buildingsync-measures-gem` is not released as a gem. BOSS loads it from a local sibling checkout (`../buildingsync-measures-gem`) configured in `config/external_measure_repos.yml`. Other sources keep their current install path.
+
+HVAC mappings follow the upstream [HVAC Mapping and Migration Guide](https://github.com/BuildingSync/buildingsync-measures-gem/blob/develop/docs/HVAC_MAPPING_AND_MIGRATION.md): 17 topology measures (`operation` create/replace, comma-separated `target_zone_names`, `standards_template` 90.1-2013/2016/2019) plus 5 `modify_existing_*` modifiers that take exact OpenStudio object names. Do not map to the deprecated `modify_hvac`. A principal HVAC label alone is family evidence, not an exact match. Do not invent model object or zone names from BuildingSync IDs.
 
 Verify every measure directory and argument against the source BOSS will load: the `BOSS.gemspec` gem versions, or the merged `buildingsync-measures-gem` ref. Do not map to measures that exist only on an unmerged branch.
 
@@ -255,11 +262,55 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 14: Generalized Runner
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-14-generalized-runner` branch
+- Status: Done
+- Delivered by: PR #23, merged into `scenario-workflow`
 - Scope: Run `baseline/in.osw` and the `:written` scenario OSWs from a `write_baseline_and_scenario_osws` result while keeping `run_baseline_osw` intact. The writer result, not a `scenarios/**/in.osw` scan, selects scenarios, because the writer does not remove stale OSWs.
 - Done when: Tests or smoke runs show the correct OSW list and baseline-only compatibility.
 - Avoid: Running skipped, stale, or missing OSWs, or removing baseline-only behavior.
+
+### PR 14A: Local Measure Source Support
+
+- Status: Planned
+- Delivered by: -
+- Scope: Let a repo entry in `config/external_measure_repos.yml` point to a local checkout (`local_path`, relative to the manifest) instead of a Git URL. Use it for `buildingsync-measures-gem` (`../../buildingsync-measures-gem`, root `lib/measures`). Keep ComStock and gem-provided measures unchanged.
+- Done when: Local sources resolve independent of CWD, BOSS runs no Git commands against them, a missing local source fails with an actionable error, and mixed-source scenario OSWs resolve every step. CI checks out `buildingsync-measures-gem` as a sibling at a recorded commit.
+- Avoid: Silent fallback to `vendor/external_measures/buildingsync-measures-gem`, changing measure path precedence, or treating `buildingsync-measures-gem` as the only source.
+
+### PR 14B: HVAC Selection Contract
+
+- Status: Planned
+- Delivered by: -
+- Depends on: Can run in parallel with PR 14A.
+- Scope: Read detailed HVAC data (sources, deliveries, plants, condensers, other HVAC systems, linked premises) and select topologies with the upstream guide's predicates. Shared by baseline and scenario workflows. Keep `get_principal_HVAC_system_type` for the existing baseline path.
+- Done when: Table-driven tests cover exact matches and separate results for missing input, conflicting input, mapping gaps, and configurations with no gem measure.
+- Avoid: Inferring topology from `MeasureName` or principal label alone, or dropping HVAC constituents silently.
+
+### PR 14C: Model Target Binding
+
+- Status: Planned
+- Delivered by: -
+- Depends on: PR 14B.
+- Scope: Bind selected BuildingSync premises to the actual OpenStudio zone and equipment names the topology and modifier measures need. OSWs are written before the model exists, so this step must prove how names are resolved at run time. A new runtime measure belongs in `buildingsync-measures-gem`, not BOSS.
+- Done when: A model-based test proves exact zone/object binding, full shared-system scope for `replace`, and self-contained scenario OSWs.
+- Avoid: Placeholder or guessed names, blank `target_zone_names` defaults, or making scenarios wait on baseline runs.
+
+### PR 14D: Baseline HVAC Integration
+
+- Status: Planned
+- Delivered by: -
+- Depends on: PR 14A-14C.
+- Scope: For exact-match files, run `create_typical_building_from_model` with `add_hvac: false`, then the split topology `create` steps. `add_hvac: false` also skips standards sizing and HVAC efficiency steps, so this PR must account for them. Otherwise keep the current baseline and warn (missing or family-only HVAC data, or templates other than 90.1-2013/2016/2019).
+- Done when: Exact-match baselines simulate with the expected HVAC; fallback files keep their current steps and log why; baseline-only and scenario-writer baselines match.
+- Avoid: Mapping DOE Ref, older 90.1, or DEER templates to 90.1-2019, or adding HVAC on top of `add_hvac: true`.
+
+### PR 14E: Scenario HVAC Mappings
+
+- Status: Planned
+- Delivered by: -
+- Depends on: PR 14D.
+- Scope: Map HVAC retrofit measures to topology `replace` steps or `modify_existing_*` steps through the PR 9 result contract. Order conditioning, then DOAS/ventilation, then modifiers. Keep existing economizer, DCV, and thermostat mappings from other gems.
+- Done when: One topology replacement and one modifier case run end to end, partial shared-system replacement is rejected, and mixed-source packages still write and run.
+- Avoid: Mapping "Replace boiler" or "Replace burner" to an efficiency edit, guessing values, or partial HVAC graphs.
 
 ### PR 15: CLI Command
 
@@ -352,7 +403,7 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 - Delivered by: PR #10, merged into `scenario-workflow` via PR #5
 - Handoff: `lib/BOSS/scenario_measure_map.json` maps 12 `building_151.xml` category/name pairs to OSW-shaped steps with `measure_dir_name` and an argument hash that includes `__SKIP__`. Source strings match reader output exactly.
 - Handoff: Roof and wall absolute insulation targets use `buildingsync-measures-gem` `modify_envelope_insulation` with SI R-values (R-30 IP = 5.28, R-25 IP = 4.40 m²K/W). Other mappings use `openstudio-ee` or `openstudio-common-measures`. Relative mappings such as air sealing, ceiling insulation by percentage, and thermal bypasses stay on relative measures.
-- Deferred: Daylight controls, package unit replacement, burner replacement, and boiler replacement. The `buildingsync-measures-gem` split HVAC measures (`modify_existing_hvac_equipment_efficiencies`, `modify_existing_plant_equipment`, `hvac_packaged_rooftop_*`) need exact model object or zone names. Map them in a follow-up after `buildingsync-measures-gem` PR #3 merges and exact target names can be supplied; PR 8 only adds the conditional-argument engine they may use.
+- Deferred: Daylight controls, package unit replacement, burner replacement, and boiler replacement. The `buildingsync-measures-gem` split HVAC measures (`modify_existing_hvac_equipment_efficiencies`, `modify_existing_plant_equipment`, `hvac_packaged_rooftop_*`) need exact model object or zone names. Map them in a follow-up after `buildingsync-measures-gem` PR #3 merges and exact target names can be supplied; PR 8 only adds the conditional-argument engine they may use. Update: upstream PR #3 merged (`c7efd32`); this work is now PR 14A-14E.
 - Verification: JSON parse passed; every mapped measure directory and argument was checked against installed `BOSS.gemspec` gems and `buildingsync-measures-gem` `develop`.
 - Verification: `C:\Ruby32-x64\bin\ruby.exe -S bundle exec rspec spec/tests/unit/scenario_measure_map_spec.rb`.
 - Follow-up: PR 6 adds `BOSS::ScenarioMeasureMapper`. PR 12 must put `buildingsync-measures-gem` on OSW `measure_paths`.
@@ -458,8 +509,8 @@ Use this section for stable facts future PRs need. Keep entries short and tied t
 
 ### PR 14: Generalized Runner
 
-- Status: In Progress
-- Delivered by: `scenario-workflow-14-generalized-runner` branch
+- Status: Done
+- Delivered by: PR #23, merged into `scenario-workflow`
 - Handoff: `BOSS::Boss.run_baseline_and_scenario_osws(write_result)` takes the symbol-keyed result of `write_baseline_and_scenario_osws`. It submits the baseline first, then every `status: :written` scenario `osw_path` in result order, deduplicated, in one `Runner#run_osws` call. It returns the runner's failure-message array; runner exceptions propagate.
 - Handoff: Skipped scenarios never run, even if an older `in.osw` exists. Scenario OSWs on disk but absent from the result are ignored; no directory is scanned. A `:written` entry whose path is missing, blank, or not a file is skipped with a `BOSS.BOSS_logger` warning.
 - Handoff: A malformed result raises `ArgumentError`; a missing baseline file logs an OpenStudio error and raises `StandardError`. Neither builds a runner. The input is not mutated.

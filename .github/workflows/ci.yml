@@ -16,9 +16,21 @@ jobs:
     env:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
+    defaults:
+      run:
+        working-directory: BOSS
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        path: BOSS
+    # Not released as a gem; config/external_measure_repos.yml loads it from ../buildingsync-measures-gem.
+    - name: Checkout buildingsync-measures-gem
+      uses: actions/checkout@v4
+      with:
+        repository: BuildingSync/buildingsync-measures-gem
+        ref: c7efd329ae30b345d238de5c4dcddeceb8ba0298
+        path: buildingsync-measures-gem
     - name: Setup
       run: |
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
