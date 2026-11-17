@@ -8,7 +8,10 @@ require 'json'
 require 'openstudio-standards'
 require_relative 'systems_map'
 require_relative 'bcl_weather_file_downloader'
+require_relative 'r_value_and_u_factor_calculator'
 include Math
+include RValueAndUFactorCalculator
+
 
 module BOSS
   class BuildingSyncReader
@@ -360,15 +363,11 @@ module BOSS
     # get principal hvac system type
     # @return [String]
     def get_principal_HVAC_system_type
-      BOSS.BOSS_logger.info("|\t|\t- finding first hvac system with principal hvac system type...")
-      # if no hvac systems, return nil
-      hvac_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}HVACSystems/#{@ns}HVACSystem") {|s| s}
-      if hvac_systems.nil?
-        BOSS.BOSS_logger.info("|\t|\t  no hvac systems found")
-        return nil
-      end
+      hvac_systems = _get_systems("HVAC", "#{@ns}HVACSystems/#{@ns}HVACSystem")
+      return nil if hvac_systems.nil? || hvac_systems.empty?
 
       # find first none nil principal_HVAC_system_type
+      BOSS.BOSS_logger.info("|\t|\t- finding first hvac system with principal hvac system type...")
       hvac_systems = hvac_systems.reject {|s| s.class == REXML::Comment}
       principal_HVAC_system_type = hvac_systems.map {|s| s.elements["#{@ns}PrincipalHVACSystemType/"]&.text}
       first_principal_HVAC_system_type = principal_HVAC_system_type.find {|x| !x.nil?}
@@ -392,14 +391,11 @@ module BOSS
     # @return [String]
     def get_total_installed_power
       # if no lighting systems, return nil
-      BOSS.BOSS_logger.info("|\t|\t|\t- finding all lighting system installed power...")
-      lighting_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}LightingSystems/#{@ns}LightingSystem") {|s| s}
-      if lighting_systems.nil?
-        BOSS.BOSS_logger.info("|\t|\t|\t  no lighting systems found")
-        return nil
-      end
+      lighting_systems = _get_systems("Lighting", "#{@ns}LightingSystems/#{@ns}LightingSystem")
+      return nil if lighting_systems.nil? || lighting_systems.empty?
 
       # get all all_installed_powers
+      BOSS.BOSS_logger.info("|\t|\t|\t- finding all lighting system installed power...")
       lighting_systems = lighting_systems.reject {|s| s.class == REXML::Comment}
       all_installed_powers = lighting_systems.map {|s| s.elements["#{@ns}InstalledPower/"]&.first&.to_s&.to_f}
       BOSS.BOSS_logger.info("|\t|\t|\t  all lighting system installed power: #{all_installed_powers}")
@@ -414,13 +410,11 @@ module BOSS
     # @return [String]
     def get_total_weighted_average_load
       # if no plug_loads, return nil
-      BOSS.BOSS_logger.info("|\t|\t|\t- finding all plug load systems weighted average load...")
-      plug_loads = @facility_xml.elements.each("#{@ns}Systems/#{@ns}PlugLoads/#{@ns}PlugLoad") {|s| s}
-      if plug_loads.nil?
-        BOSS.BOSS_logger.info("|\t|\t|\t  no plug load systems found")
-        return nil
-      end
+      plug_loads = _get_systems("PlugLoad", "#{@ns}PlugLoads/#{@ns}PlugLoad")
+      return nil if plug_loads.nil? || plug_loads.empty?
+
       # get all weighted_average_loads
+      BOSS.BOSS_logger.info("|\t|\t|\t- finding all plug load systems weighted average load...")
       plug_loads = plug_loads.reject {|s| s.class == REXML::Comment}
       all_weighted_average_loads = plug_loads.map {|s| s.elements["#{@ns}WeightedAverageLoad/"]&.text}
       BOSS.BOSS_logger.info("|\t|\t|\t  all plug load system weighted average load: #{all_weighted_average_loads}")
@@ -430,6 +424,93 @@ module BOSS
       return nil if !all_weighted_average_loads.all?
       return all_weighted_average_loads.map {|s| s.to_f}.sum
     end
+
+
+  def _get_systems(system_name, system_path)
+    BOSS.BOSS_logger.info("|\t|\t|\t- finding all #{system_name} systems...")
+    systems = @facility_xml.elements.each("#{@ns}Systems/#{system_path}") {|s| s}
+    if systems.nil? || systems.length == 0
+      BOSS.BOSS_logger.info("|\t|\t|\t  no #{system_name} systems found")
+    end
+      BOSS.BOSS_logger.info("|\t|\t|\t  #{systems.length} #{system_name} systems found")
+
+    return systems
+  end
+
+  def _get_section_ids(section_id_path, section_id_name="")
+    BOSS.BOSS_logger.info("|\t|\t|\t- finding all #{section_id_name} section ids...")
+    section_ids = @building_xml.elements.each("#{@ns}Sections/#{@ns}Section/#{section_id_path}") {|s| s}
+    if section_ids.nil? || section_ids.length == 0
+      BOSS.BOSS_logger.info("|\t|\t|\t  no #{section_id_name} section_ids found")
+    end
+      BOSS.BOSS_logger.info("|\t|\t|\t  #{section_ids.length} #{section_id_name} section_ids found")
+
+    return section_ids
+  end
+
+  def _get_target_r_value_and_u_factor(system_name, system_path, section_id_path, section_id_name, area_path, r_value_path, u_factor_path)
+    # get systems
+    systems = _get_systems(system_name, system_path)
+    return nil, nil if systems.nil? || systems.empty?
+
+    # get section_id
+    section_ids = _get_section_ids(section_id_path, section_id_name)
+    return nil, nil if section_ids.nil? || section_ids.empty?
+
+    # check all sections have area
+    section_ids_missing_area = section_ids.filter {|section_id| section_id.elements["#{@ns}#{area_path}/"].nil?}
+    if !section_ids_missing_area.empty?
+      BOSS.BOSS_logger.info("|\t|\t|\t  Cannot calculate weighted r_value nor u_factor as these #{section_id_name} do not have an area: #{section_ids_missing_area.map {|s| s.attributes["IDref"]}}")
+      return nil, nil
+    end
+
+    # pair systems and sections, agg data
+    data_by_id = zip_envelope_data(section_ids, systems, area_path, r_value_path, u_factor_path, system_name)
+
+    # calculate r value
+    r_value = get_sum_weighted_by_area(data_by_id, "r_value", system_name)
+
+    # calculate u factor
+    u_factor = get_sum_weighted_by_area(data_by_id, "u_factor", system_name=system_name)
+
+    return r_value, u_factor
+  end
+
+  def get_wall_target_r_value_and_u_factor
+    return _get_target_r_value_and_u_factor(
+      system_name="Wall",
+      system_path="#{@ns}WallSystems/#{@ns}WallSystem",
+      section_id_path="#{@ns}Sides/#{@ns}Side/#{@ns}WallIDs/#{@ns}WallID",
+      section_id_name="Wall",
+      area_path="#{@ns}WallArea",
+      r_value_path="#{@ns}WallRValue",
+      u_factor_path="#{@ns}WallUFactor",
+    )
+  end
+
+  def get_roof_target_r_value_and_u_factor
+    return _get_target_r_value_and_u_factor(
+      system_name="Roof",
+      system_path="#{@ns}RoofSystems/#{@ns}RoofSystem",
+      section_id_path="#{@ns}Roofs/#{@ns}Roof/#{@ns}RoofID",
+      section_id_name="Roof",
+      area_path="#{@ns}RoofArea",
+      r_value_path="#{@ns}RoofRValue",
+      u_factor_path="#{@ns}RoofUFactor",
+    )
+  end
+
+  def get_floor_target_r_value_and_u_factor
+    return _get_target_r_value_and_u_factor(
+      system_name="Foundation",
+      system_path="#{@ns}FoundationSystems/#{@ns}FoundationSystem",
+      section_id_path="#{@ns}Foundations/#{@ns}Foundation/#{@ns}FoundationID",
+      section_id_name="Foundation",
+      area_path="#{@ns}FoundationArea",
+      r_value_path="#{@ns}SlabRValue",
+      u_factor_path="#{@ns}SlabUFactor",
+    )
+  end
 
     # first valid window that has all mappable fields
     def get_window_data
@@ -448,7 +529,7 @@ module BOSS
         glass_type = window.elements["#{@ns}GlassType"]&.text
         fenestration_glass_layers = window.elements["#{@ns}FenestrationGlassLayers"]&.text
         solar_heat_gain_coefficient = window.elements["#{@ns}SolarHeatGainCoefficient"]&.text
-        visible_transmittance = window.elements["#{@ns}VisibleTransmittance"]&.text
+        visible_transmittance = window.elements["#{@ns}VisibleTransmitance"]&.text
 
         # We only need one of fenestration_u_factor/fenestration_r_value
         fenestration_u_factor = window.elements["#{@ns}FenestrationUFactor"]&.text

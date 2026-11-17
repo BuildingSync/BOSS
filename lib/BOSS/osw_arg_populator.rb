@@ -290,6 +290,57 @@ class OSWArgPopulator
 
   end
 
+  def self.populate_modify_envelope_insulation(osw, bsync_reader)
+    BOSS.BOSS_logger.info("+++++++++++++++++++++++++++ populating measure modify_envelope_insulation +++++++++++++++++++++++")
+    osw[:steps].append({"measure_dir_name": "modify_envelope_insulation", "arguments": {}})
+    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "modify_envelope_insulation", key, value) }
+
+    # Add args
+    # -  __SKIP__
+    set_measure_argument.call("__SKIP__", false)
+
+    BOSS.BOSS_logger.info("|\t- gathering measure requirements...")
+    BOSS.BOSS_logger.info("|\t|\t- calculating wall r value and u factor...")
+    wall_target_rvalue, wall_target_uvalue = bsync_reader.get_wall_target_r_value_and_u_factor
+    BOSS.BOSS_logger.info("|\t|\t- calculating roof r value and u factor...")
+    roof_target_rvalue, roof_target_uvalue = bsync_reader.get_roof_target_r_value_and_u_factor
+    BOSS.BOSS_logger.info("|\t|\t- calculating floor r value and u factor...")
+    floor_target_rvalue, floor_target_uvalue = bsync_reader.get_floor_target_r_value_and_u_factor
+
+    # -  wall_target_rvalue
+    BOSS.BOSS_logger.info("|\t- setting arg 'wall_target_rvalue'...")
+    BOSS.BOSS_logger.info("|\t  set to #{wall_target_rvalue}")
+    set_measure_argument.call("wall_target_rvalue", wall_target_rvalue)
+
+    # -  wall_target_uvalue
+    BOSS.BOSS_logger.info("|\t- setting arg 'wall_target_uvalue'...")
+    BOSS.BOSS_logger.info("|\t  set to #{wall_target_uvalue}")
+    set_measure_argument.call("wall_target_uvalue", wall_target_uvalue)
+
+    # -  roof_target_rvalue
+    BOSS.BOSS_logger.info("|\t- setting arg 'roof_target_rvalue'...")
+    BOSS.BOSS_logger.info("|\t  set to #{roof_target_rvalue}")
+    set_measure_argument.call("roof_target_rvalue", roof_target_rvalue)
+
+    # -  roof_target_uvalue
+    BOSS.BOSS_logger.info("|\t- setting arg 'roof_target_uvalue'...")
+    BOSS.BOSS_logger.info("|\t  set to #{roof_target_uvalue}")
+    set_measure_argument.call("roof_target_uvalue", roof_target_uvalue)
+
+    # -  floor_target_rvalue
+    BOSS.BOSS_logger.info("|\t- setting arg 'floor_target_rvalue'...")
+    BOSS.BOSS_logger.info("|\t  set to #{floor_target_rvalue}")
+    set_measure_argument.call("floor_target_rvalue", floor_target_rvalue)
+
+    # -  floor_target_uvalue
+    BOSS.BOSS_logger.info("|\t- setting arg 'floor_target_uvalue'...")
+    BOSS.BOSS_logger.info("|\t  set to #{floor_target_uvalue}")
+    set_measure_argument.call("floor_target_uvalue", floor_target_uvalue)
+
+    BOSS.BOSS_logger.info("++++++++++++++++++++++++++++++++++ populated. +++++++++++++++++++++++++++++++++++++++")
+    BOSS.BOSS_logger.info("")
+  end
+
   def self.populate_openstudio_results_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("+++++++++++++++++++++++++ populating measure openstudio_results +++++++++++++++++++++")
     osw[:steps].append({"measure_dir_name": "openstudio_results", "arguments": {}})
