@@ -11,6 +11,7 @@ require 'BOSS/buildingsync_reader/buildingsync_reader'
 require 'BOSS/osw_arg_populator'
 require 'BOSS/external_measure_repo_manager'
 require 'BOSS/scenario_measure_mapper'
+require 'BOSS/baseline_hvac_planner'
 
 require 'openstudio/common_measures'
 require 'openstudio/model_articulation'
@@ -201,7 +202,16 @@ module BOSS
       OSWArgPopulator::populate_change_building_location_args(baseline_osw, bsync_reader)
 
       OSWArgPopulator::populate_create_bar_from_building_type_ratios_args(baseline_osw, bsync_reader)
-      OSWArgPopulator::populate_create_typical_building_from_model_args(baseline_osw, bsync_reader)
+      hvac_plan = BaselineHvacPlanner.new.plan(bsync_reader.get_hvac_systems_xml, bsync_reader.get_standard_template)
+      OSWArgPopulator::populate_create_typical_building_from_model_args(baseline_osw, bsync_reader,
+                                                                        add_hvac: !hvac_plan.topology?)
+      if hvac_plan.topology?
+        hvac_plan.steps.each { |step| OSWArgPopulator.append_step(baseline_osw, step) }
+      else
+        hvac_plan.messages.each do |message|
+          BOSS.BOSS_logger.warn("BOSS.Boss: Keeping create_typical_building_from_model HVAC: #{message}")
+        end
+      end
 
       OSWArgPopulator::populate_set_lighting_loads_by_LPD_args(baseline_osw, bsync_reader)
       OSWArgPopulator::populate_set_electric_equipment_loads_by_epd_args(baseline_osw, bsync_reader)
@@ -215,7 +225,8 @@ module BOSS
       # Force ordering: local BOSS measures, extension-discovered (gems), then external repos.
       manager = ExternalMeasureRepoManager.new
       local_measure_dirs = manager.local_measure_directories
-      external_measure_dirs = manager.resolved_measure_directories
+      # Topology HVAC steps need buildingsync-measures-gem, which is otherwise scenario-only.
+      external_measure_dirs = manager.resolved_measure_directories(include_scenario_only: hvac_plan.topology?)
       discovered_measure_dirs = baseline_osw[:measure_paths] || []
 
       discovered_nonlocal_nonexternal = discovered_measure_dirs.reject do |path|

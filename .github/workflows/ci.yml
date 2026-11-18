@@ -29,7 +29,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: BuildingSync/buildingsync-measures-gem
-        ref: 30cdd344db06a8708b79946b1a8b904fe9c3d6c4
+        ref: 789bd50ec0ba42559f85e5cac23fcbbf8f9bdfbe
         path: buildingsync-measures-gem
     - name: Setup
       run: |

@@ -84,7 +84,7 @@ RSpec.describe BOSS::HvacTargetBinder do
 
   it 'rejects templates and operations the topology measures do not support' do
     result = match_result([{ type: 'Building', id: 'B-1' }])
-    expect { binder.bind(result, operation: 'create', standards_template: 'DOE Ref Pre-1980') }
+    expect { binder.bind(result, operation: 'create', standards_template: 'DEER 2017') }
       .to raise_error(ArgumentError, /standards_template/)
     expect { binder.bind(result, operation: 'delete', standards_template: '90.1-2019') }
       .to raise_error(ArgumentError, /operation/)
