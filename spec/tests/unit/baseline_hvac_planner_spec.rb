@@ -140,15 +140,15 @@ RSpec.describe BOSS::BaselineHvacPlanner do
                   group_key: [:recovery, id], record_ids: [id] + links, premises:)
     end
 
-    it 'appends one ComStock recovery step and the validator after sizing' do
+    it 'appends one ComStock recovery step after sizing' do
       plan = plan_for([rtu.call, rtu.call('D-2'), recovery.call(['D-1']), recovery.call(['D-2'], id: 'O-2')], hvac_systems)
 
       expect(plan.status).to eq(:topology), plan.messages.join("\n")
       expect(plan.steps.map { |step| step[:measure_dir_name] }).to eq(
         ['apply_hvac_topology_to_zone_scope', 'apply_standard_hvac_sizing_and_efficiency',
-         'upgrade_hvac_exhaust_air_energy_or_heat_recovery', 'validate_baseline_heat_recovery']
+         'upgrade_hvac_exhaust_air_energy_or_heat_recovery']
       )
-      expect(plan.steps.last(2).map { |step| step[:arguments] }).to eq([{}, {}])
+      expect(plan.steps.last[:arguments]).to eq({})
     end
 
     {
@@ -177,9 +177,7 @@ RSpec.describe BOSS::BaselineHvacPlanner do
       expect(plan.status).to eq(:topology), plan.messages.join("\n")
       expect(plan.steps.first[:arguments]).to include(topology_measure: 'hvac_packaged_rooftop_heat_pump',
                                                       topology_arguments_json: '{"supplemental_heating_fuel":"NaturalGas"}')
-      expect(plan.steps.map { |step| step[:measure_dir_name] }.last(2)).to eq(
-        ['upgrade_hvac_exhaust_air_energy_or_heat_recovery', 'validate_baseline_heat_recovery']
-      )
+      expect(plan.steps.last[:measure_dir_name]).to eq('upgrade_hvac_exhaust_air_energy_or_heat_recovery')
     end
 
     ['Example_ASHRAE_L2_Report.xml', 'BuildingEQ-1.0.0.xml'].each do |file_name|
@@ -190,6 +188,18 @@ RSpec.describe BOSS::BaselineHvacPlanner do
 
         expect(described_class.new.plan(reader.get_hvac_systems_xml, reader.get_standard_template).status).to eq(:fallback)
       end
+    end
+
+    it 'folds the ASHRAE L2 economizer delivery and infers recovery integration' do
+      path = File.expand_path('../../files/v2.7.0/Example_ASHRAE_L2_Report.xml', __dir__)
+      doc = REXML::Document.new(File.read(path), ignore_whitespace_nodes: :all)
+      results = BOSS::HvacTopologySelector.new.select(BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1).get_hvac_systems_xml)
+
+      expect(results.map { |r| r.record_ids.first }).not_to include('Delivery-45022140')
+      recovery = results.find { |r| r.measure == 'upgrade_hvac_exhaust_air_energy_or_heat_recovery' }
+      expect(recovery.status).to eq(:match), recovery.messages.join(' ')
+      expect(recovery.record_ids.drop(1)).to eq(['Delivery-45022120'])
+      expect(recovery.messages.join).to match(/Integration inferred/)
     end
   end
 

@@ -24,7 +24,6 @@ module BOSS
     VENTILATION_MEASURES = HvacTopologySelector::VENTILATION_MEASURES.values.map(&:last).freeze
     ZONE_EQUIPMENT_MEASURES = ['hvac_ptac', 'hvac_pthp', 'hvac_four_pipe_fan_coil', 'hvac_vrf'].freeze
     RECOVERY_MEASURE = HvacTopologySelector::RECOVERY_MEASURE
-    RECOVERY_VALIDATION_MEASURE = 'validate_baseline_heat_recovery'
     RECOVERY_HOST_MEASURES = ['hvac_packaged_rooftop_ac', 'hvac_packaged_rooftop_heat_pump', 'hvac_warm_air_furnace',
                               'hvac_packaged_rooftop_vav_hw_reheat', 'hvac_vav_hw_reheat'].freeze
 
@@ -84,10 +83,7 @@ module BOSS
 
       sizing_step = { measure_dir_name: SIZING_MEASURE, arguments: { standards_template: } }
       steps = bindings.map { |_, binding| binding.step } + [sizing_step]
-      if !recovery.empty?
-        steps += [{ measure_dir_name: RECOVERY_MEASURE, arguments: {} },
-                  { measure_dir_name: RECOVERY_VALIDATION_MEASURE, arguments: {} }]
-      end
+      steps << { measure_dir_name: RECOVERY_MEASURE, arguments: {} } if !recovery.empty?
       Plan.new(status: :topology, steps:, messages: [])
     end
 

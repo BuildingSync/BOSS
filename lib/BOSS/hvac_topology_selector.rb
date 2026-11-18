@@ -520,10 +520,44 @@ module BOSS
         end
       end
 
-      results = deliveries.reject { |d| ventilation_links.key?(d.attributes['ID']) }.map do |delivery|
-        _select_delivery(sys, delivery, index)
+      folded = _economizer_folds(deliveries)
+      results = deliveries.reject { |d| ventilation_links.key?(d.attributes['ID']) || folded.key?(d.attributes['ID']) }
+                          .map { |delivery| _select_delivery(sys, delivery, index) }
+      results + others.map { |other| _select_other(sys, other, index, ventilation_links, folded) }
+    end
+
+    ECONOMIZER_ONLY_CHILDREN = ['AirSideEconomizer', 'SupplyAirTemperatureResetControl', 'StaticPressureResetControl'].freeze
+
+    # A zone-equipment delivery whose only content is fan-based economizer/reset controls and
+    # whose heating and cooling sources equal those of exactly one central-fan delivery describes
+    # that central delivery's controls, not separate equipment.
+    # @return [Hash{String => String}] folded delivery ID => central delivery ID
+    def _economizer_folds(deliveries)
+      sources = ->(d) { ['HeatingSourceID', 'CoolingSourceID'].map { |p| Context.nodes(d, p).map { |n| n.attributes['IDref'] }.sort } }
+      centrals = deliveries.select do |d|
+        Context.texts(d, 'DeliveryType/CentralAirDistribution/AirDeliveryType') == ['Central fan']
       end
-      results + others.map { |other| _select_other(sys, other, index, ventilation_links) }
+      deliveries.each_with_object({}) do |delivery, folds|
+        next unless _economizer_only?(delivery)
+
+        key = sources.call(delivery)
+        next if key.any?(&:empty?)
+
+        hosts = centrals.select { |c| sources.call(c) == key }
+        folds[delivery.attributes['ID']] = hosts.first.attributes['ID'] if hosts.length == 1
+      end
+    end
+
+    def _economizer_only?(delivery)
+      return false unless (delivery.elements.to_a.map(&:name) - ['DeliveryType', 'HeatingSourceID', 'CoolingSourceID']).empty?
+
+      type = Context.nodes(delivery, 'DeliveryType').first
+      zone = type && Context.nodes(type, 'ZoneEquipment').first
+      fan = zone && Context.nodes(zone, 'FanBased').first
+      return false if fan.nil? || type.elements.to_a.length != 1 || zone.elements.to_a.length != 1
+
+      names = fan.elements.to_a.map(&:name)
+      names.include?('AirSideEconomizer') && (names - ECONOMIZER_ONLY_CHILDREN).empty?
     end
 
     # A record whose only content is MechanicalVentilation with VentilationType None or no type
@@ -550,13 +584,25 @@ module BOSS
 
     # Recovery is modeled on the linked deliveries' existing air loops, so the linked
     # deliveries must be central air and stay selected as conditioning deliveries.
-    def _select_recovery(sys, other, index, ids, linked_ids, premises)
+    def _select_recovery(sys, other, index, linked_ids, premises, folded)
       sys_id = sys.attributes['ID']
+      linked_ids = linked_ids.map { |id| folded.fetch(id, id) }.uniq
+      ids = [other.attributes['ID']] + linked_ids
+      messages = []
       integration = Context.texts(other, 'Integration')
       if integration.empty?
-        return _result(:missing_input, sys_id, ids, premises, nil,
-                       ['Recovery ventilation requires Integration to identify the air system it serves.'],
-                       configuration: RECOVERY_CONFIGURATION)
+        central = !linked_ids.empty? && linked_ids.all? do |id|
+          delivery = index[:delivery][id]
+          delivery && !Context.nodes(delivery, 'DeliveryType/CentralAirDistribution').empty?
+        end
+        unless central
+          return _result(:missing_input, sys_id, ids, premises, nil,
+                         ['Recovery ventilation requires Integration to identify the air system it serves.'],
+                         configuration: RECOVERY_CONFIGURATION)
+        end
+
+        integration = [RECOVERY_INTEGRATION]
+        messages << "Integration inferred as '#{RECOVERY_INTEGRATION}' because every linked delivery is central air."
       end
       if integration != [RECOVERY_INTEGRATION]
         return _result(:not_mappable, sys_id, ids, premises, nil,
@@ -571,7 +617,10 @@ module BOSS
 
       recovery_links = Context.nodes(sys, 'OtherHVACSystems/OtherHVACSystem')
                               .select { |o| _recovery?(sys, o, index) }
-                              .flat_map { |o| Context.nodes(o, 'LinkedDeliveryIDs/LinkedDeliveryID').map { |l| l.attributes['IDref'] } }
+                              .flat_map do |o|
+                                Context.nodes(o, 'LinkedDeliveryIDs/LinkedDeliveryID')
+                                       .map { |l| folded.fetch(l.attributes['IDref'], l.attributes['IDref']) }.uniq
+                              end
       conflicts = linked_ids.reject { |id| index[:delivery].key?(id) }
                             .map { |id| "LinkedDeliveryID '#{id}' does not resolve to a Delivery" }
       conflicts += linked_ids.select { |id| recovery_links.count(id) > 1 }.uniq
@@ -589,7 +638,7 @@ module BOSS
       failures << 'Guard failed: O/PrimaryFuel' unless x_probe.guard(other, 'PrimaryFuel', ELECTRIC)
       return _result(:conflicting_input, sys_id, ids, premises, nil, failures, configuration: RECOVERY_CONFIGURATION) unless failures.empty?
 
-      _result(:match, sys_id, ids, premises, [:recovery, other.attributes['ID']], [],
+      _result(:match, sys_id, ids, premises, [:recovery, other.attributes['ID']], messages,
               configuration: RECOVERY_CONFIGURATION, measure: RECOVERY_MEASURE)
     end
 
@@ -682,7 +731,7 @@ module BOSS
               measure_arguments: rule[:arguments] ? rule[:arguments].call(x) : {})
     end
 
-    def _select_other(sys, other, index, ventilation_links)
+    def _select_other(sys, other, index, ventilation_links, folded = {})
       sys_id = sys.attributes['ID']
       other_id = other.attributes['ID']
       linked_ids = Context.nodes(other, 'LinkedDeliveryIDs/LinkedDeliveryID').map { |l| l.attributes['IDref'] }
@@ -709,7 +758,7 @@ module BOSS
       end
 
       ventilation_type = ventilation_type.first
-      return _select_recovery(sys, other, index, ids, linked_ids, premises) if RECOVERY_TYPES.include?(ventilation_type)
+      return _select_recovery(sys, other, index, linked_ids, premises, folded) if RECOVERY_TYPES.include?(ventilation_type)
 
       if NOT_MAPPABLE_OTHER.key?(ventilation_type)
         configuration = NOT_MAPPABLE_OTHER[ventilation_type]

@@ -313,8 +313,14 @@ RSpec.describe BOSS::HvacTopologySelector do
       end
     end
 
-    it 'reports missing integration as missing input' do
+    it 'infers central integration when every linked delivery is central air' do
       results = select_from(with_recovery.call(recovery.call(integration: nil)))
+      expect(results.map(&:status)).to eq([:match, :match])
+      expect(results.last.messages.join).to match(/Integration inferred/)
+    end
+
+    it 'reports missing integration without linked deliveries as missing input' do
+      results = select_from(with_recovery.call(recovery.call(integration: nil, links: [])))
       expect(results.map(&:status)).to eq([:match, :missing_input])
     end
 
