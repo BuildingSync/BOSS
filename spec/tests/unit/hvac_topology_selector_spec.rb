@@ -283,9 +283,64 @@ RSpec.describe BOSS::HvacTopologySelector do
       expect(results.last.status).to eq(:not_mappable)
     end
 
-    it 'reports energy recovery ventilation as not mappable without dropping it' do
+    it 'reports stand-alone energy recovery ventilation as not mappable without hiding its delivery' do
       results = select_from(with_ventilation.call(other.call(mechanical.call('Energy recovery ventilator'))))
+      expect(results.length).to eq(3)
+      expect(results.first).to have_attributes(status: :match, measure: 'hvac_ptac')
+      expect(results.last).to have_attributes(status: :not_mappable, measure: nil)
+    end
+
+    rtu_hp = exact_cases['Packaged Rooftop Heat Pump'][1]
+    recovery = lambda do |type: 'Energy recovery ventilator', integration: 'Integrated with central air distribution', links: ['D-1'], extra: '', id: 'O-1'|
+      link_xml = links.map { |l| "<LinkedDeliveryID IDref=\"#{l}\"/>" }.join
+      integration_xml = integration ? "<Integration>#{integration}</Integration>" : ''
+      "<OtherHVACSystem ID=\"#{id}\"><OtherHVACType><MechanicalVentilation><VentilationType>#{type}</VentilationType>" \
+        "#{extra}</MechanicalVentilation></OtherHVACType><LinkedDeliveryIDs>#{link_xml}</LinkedDeliveryIDs>" \
+        "#{integration_xml}</OtherHVACSystem>"
+    end
+    with_recovery = lambda do |*records, args: rtu_hp|
+      system_xml.call(**args, others: "<OtherHVACSystems>#{records.join}</OtherHVACSystems>")
+    end
+
+    ['Energy recovery ventilator', 'Heat recovery ventilator'].each do |type|
+      it "matches integrated #{type} to the ComStock measure and keeps the conditioning delivery" do
+        results = select_from(with_recovery.call(recovery.call(type:)))
+        expect(results.map { |r| [r.status, r.measure] }).to eq(
+          [[:match, 'hvac_packaged_rooftop_heat_pump'], [:match, 'upgrade_hvac_exhaust_air_energy_or_heat_recovery']]
+        )
+        expect(results.last).to have_attributes(record_ids: ['O-1', 'D-1'], group_key: [:recovery, 'O-1'],
+                                                measure_arguments: {})
+      end
+    end
+
+    it 'reports missing integration as missing input' do
+      results = select_from(with_recovery.call(recovery.call(integration: nil)))
+      expect(results.map(&:status)).to eq([:match, :missing_input])
+    end
+
+    it 'reports local-air recovery as not mappable' do
+      results = select_from(with_recovery.call(recovery.call(integration: 'Integrated with local air distribution')))
       expect(results.map(&:status)).to eq([:match, :not_mappable])
+    end
+
+    it 'reports missing links as missing input' do
+      expect(select_from(with_recovery.call(recovery.call(links: []))).last.status).to eq(:missing_input)
+    end
+
+    it 'reports broken and overlapping links as conflicting input' do
+      expect(select_from(with_recovery.call(recovery.call(links: ['D-X']))).last.status).to eq(:conflicting_input)
+      results = select_from(with_recovery.call(recovery.call, recovery.call(id: 'O-2')))
+      expect(results.map(&:status)).to eq([:match, :conflicting_input, :conflicting_input])
+    end
+
+    it 'reports recovery on zone equipment deliveries as conflicting input' do
+      results = select_from(with_recovery.call(recovery.call, args: exact_cases['Packaged Terminal Air Conditioner'][1]))
+      expect(results.map(&:status)).to eq([:match, :conflicting_input])
+    end
+
+    it 'reports demand control ventilation as conflicting input' do
+      dcv = '<DemandControlVentilation>true</DemandControlVentilation>'
+      expect(select_from(with_recovery.call(recovery.call(extra: dcv))).last.status).to eq(:conflicting_input)
     end
 
     it 'reports humidifiers as not mappable' do

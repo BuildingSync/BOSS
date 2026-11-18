@@ -36,7 +36,7 @@ BuildingSync OpenStudio Simulator (BOSS) takes in BuildingSync files, creates Op
 The shipped manifest lives at [config/external_measure_repos.yml](config/external_measure_repos.yml) and is preconfigured with:
 
 - local measure roots: `lib/measures` (first in precedence)
-- external repository: comstock (`measures` and `resources/measures`)
+- external repository: comstock (`measures` and `resources/measures`), pinned to commit `393de7bf`; later revisions of its recovery measure require the `comstock-typical` gem, which BOSS does not bundle
 - local checkout: `buildingsync-measures-gem` (`lib/measures`), expected as a sibling of this repository (`../buildingsync-measures-gem`). It is marked `scenario_only` and is added to `measure_paths` only for baselines that use an HVAC topology. CI pins its commit via `BSYNC_MEASURES_REF` in [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 Measure path precedence is:
@@ -67,6 +67,8 @@ Configurations that can produce a topology baseline:
 
 A Ventilation Only (`hvac_ventilation_only`) or Dedicated Outdoor Air System (`hvac_doas`) configuration can be added on top, but only alongside PTAC, PTHP, four-pipe fan coil, or VRF.
 
+A heat recovery or energy recovery ventilator (`OtherHVACSystem` with `Integration` `Integrated with central air distribution`) is applied after sizing with ComStock's `upgrade_hvac_exhaust_air_energy_or_heat_recovery`, followed by the local `validate_baseline_heat_recovery` check that every outdoor-air loop has one heat exchanger. Recovery is supported only with packaged rooftop AC/heat pump, warm air furnace, and the two VAV hot water reheat configurations, must link every conditioning delivery, and must serve the whole building. ComStock chooses ERV or HRV and its performance from the climate zone, so the audited recovery type and effectiveness are not transferred. Stand-alone or local-air recovery falls back.
+
 Recognized but not yet mapped (always fall back): Packaged Rooftop VAV with Electric Reheat, VAV with Electric Reheat, Water Loop Heat Pump, Ground Source Heat Pump, Chilled Beam, and hydronic radiant systems.
 
 BOSS also falls back when:
@@ -79,7 +81,7 @@ BOSS also falls back when:
 
 On fallback, BOSS uses the `system_type` mapping below with `add_hvac` set to `true`, and logs a warning explaining why.
 
-Integration simulations currently cover the packaged rooftop heat pump; the other configurations are covered by unit specs.
+Integration simulations currently cover the packaged rooftop heat pump, with and without recovery (`Example_ASHRAE_L2_Report_l200_erv.xml`, an edited derivative of `Example_ASHRAE_L2_Report.xml`); the other configurations are covered by unit specs.
 
 ## OpenStudio Compatibility Version
 

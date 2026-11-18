@@ -23,6 +23,10 @@ module BOSS
     SIZING_MEASURE = 'apply_standard_hvac_sizing_and_efficiency'
     VENTILATION_MEASURES = HvacTopologySelector::VENTILATION_MEASURES.values.map(&:last).freeze
     ZONE_EQUIPMENT_MEASURES = ['hvac_ptac', 'hvac_pthp', 'hvac_four_pipe_fan_coil', 'hvac_vrf'].freeze
+    RECOVERY_MEASURE = HvacTopologySelector::RECOVERY_MEASURE
+    RECOVERY_VALIDATION_MEASURE = 'validate_baseline_heat_recovery'
+    RECOVERY_HOST_MEASURES = ['hvac_packaged_rooftop_ac', 'hvac_packaged_rooftop_heat_pump', 'hvac_warm_air_furnace',
+                              'hvac_packaged_rooftop_vav_hw_reheat', 'hvac_vav_hw_reheat'].freeze
 
     Plan = Struct.new(:status, :steps, :messages, keyword_init: true) do
       def topology? = status == :topology
@@ -56,6 +60,7 @@ module BOSS
       unmatched = results.reject { |result| result.status == :match }
       return fallback(unmatched.map { |result| describe(result, result.status, result.messages) }) if !unmatched.empty?
 
+      recovery, results = results.partition { |result| result.measure == RECOVERY_MEASURE }
       groups = results.group_by { |result| [result.measure, result.measure_arguments || {}] }.values
                       .map { |members| merge(members, hvac_systems) }
       ventilation, conditioning = groups.partition { |result| VENTILATION_MEASURES.include?(result.measure) }
@@ -69,6 +74,7 @@ module BOSS
         problems << "#{ventilation.first.configuration} cannot be added to zones served by " \
                     "#{conditioning.first.configuration} air loops."
       end
+      problems += recovery_problems(recovery, results, conditioning, ventilation, hvac_systems) if !recovery.empty?
       return fallback(problems) if !problems.empty?
 
       bindings = conditioning.map { |result| [result, @binder.bind(result, operation:, standards_template:)] } +
@@ -77,7 +83,12 @@ module BOSS
       return fallback(unbound.map { |result, binding| describe(result, binding.status, binding.messages) }) if !unbound.empty?
 
       sizing_step = { measure_dir_name: SIZING_MEASURE, arguments: { standards_template: } }
-      Plan.new(status: :topology, steps: bindings.map { |_, binding| binding.step } + [sizing_step], messages: [])
+      steps = bindings.map { |_, binding| binding.step } + [sizing_step]
+      if !recovery.empty?
+        steps += [{ measure_dir_name: RECOVERY_MEASURE, arguments: {} },
+                  { measure_dir_name: RECOVERY_VALIDATION_MEASURE, arguments: {} }]
+      end
+      Plan.new(status: :topology, steps:, messages: [])
     end
 
     # @return [Array<String>] HVACSystem IDs that measures name as alternatives or modified systems
@@ -128,6 +139,31 @@ module BOSS
     end
 
     private
+
+    # ComStock recovery is model-wide, so it must cover every conditioning delivery of one
+    # supported air-loop configuration with the same whole-building scope.
+    def recovery_problems(recovery, results, conditioning, ventilation, hvac_systems)
+      host = conditioning.first
+      return [] if conditioning.length != 1
+
+      problems = []
+      problems << 'Recovery ventilation cannot be combined with separate ventilation equipment.' if !ventilation.empty?
+      if !RECOVERY_HOST_MEASURES.include?(host.measure)
+        problems << "Recovery ventilation is not supported with #{host.configuration}."
+      end
+      scope = merge(recovery, hvac_systems).premises
+      if scope != host.premises || scope.length != 1 || scope.first[:type] != 'Building'
+        problems << 'Recovery ventilation and conditioning must both serve the whole building.'
+      end
+      covered = recovery.flat_map { |r| r.record_ids.drop(1).map { |id| [r.hvac_system_id, id] } }
+      deliveries = results.reject { |r| VENTILATION_MEASURES.include?(r.measure) }
+                          .map { |r| [r.hvac_system_id, r.record_ids.first] }
+      uncovered = deliveries - covered
+      if !uncovered.empty?
+        problems << "Recovery ventilation does not serve deliveries #{uncovered.map(&:last).join(', ')}."
+      end
+      problems
+    end
 
     def merge(members, hvac_systems)
       merged = members.first.dup

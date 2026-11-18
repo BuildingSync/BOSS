@@ -26,7 +26,9 @@ local_measure_roots:
 repos:
   - name: comstock
     url: https://github.com/NatLabRockies/comstock.git
-    ref: main
+    # Pinned: later revisions require the comstock-typical gem in
+    # upgrade_hvac_exhaust_air_energy_or_heat_recovery, which BOSS does not bundle.
+    ref: 393de7bf86479537f42ea36c91dd2ec7ae1259ea
     measure_roots:
       - measures
       - resources/measures

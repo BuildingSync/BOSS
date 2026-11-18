@@ -453,10 +453,14 @@ module BOSS
     ].freeze
 
     NOT_MAPPABLE_OTHER = {
-      'Heat recovery ventilator' => 'Heat-recovery / energy-recovery ventilation',
-      'Energy recovery ventilator' => 'Heat-recovery / energy-recovery ventilation',
       'Exhaust only' => 'Exhaust-only / spot exhaust'
     }.freeze
+
+    # Exhaust-air recovery added by ComStock to existing outdoor-air loops (no arguments).
+    RECOVERY_TYPES = ['Heat recovery ventilator', 'Energy recovery ventilator'].freeze
+    RECOVERY_CONFIGURATION = 'Exhaust air heat / energy recovery'
+    RECOVERY_MEASURE = 'upgrade_hvac_exhaust_air_energy_or_heat_recovery'
+    RECOVERY_INTEGRATION = 'Integrated with central air distribution'
 
     OTHER_EQUIPMENT_NOT_MAPPABLE = {
       'SpotExhaust' => 'Exhaust-only / spot exhaust',
@@ -539,6 +543,56 @@ module BOSS
       !texts.empty? && texts.all? { |t| INTEGRATED.include?(t) }
     end
 
+    def _recovery?(sys, other, index)
+      x = Context.new(sys, other, index)
+      !(Context.texts(x.mv(other), 'VentilationType') & RECOVERY_TYPES).empty?
+    end
+
+    # Recovery is modeled on the linked deliveries' existing air loops, so the linked
+    # deliveries must be central air and stay selected as conditioning deliveries.
+    def _select_recovery(sys, other, index, ids, linked_ids, premises)
+      sys_id = sys.attributes['ID']
+      integration = Context.texts(other, 'Integration')
+      if integration.empty?
+        return _result(:missing_input, sys_id, ids, premises, nil,
+                       ['Recovery ventilation requires Integration to identify the air system it serves.'],
+                       configuration: RECOVERY_CONFIGURATION)
+      end
+      if integration != [RECOVERY_INTEGRATION]
+        return _result(:not_mappable, sys_id, ids, premises, nil,
+                       ["Recovery with Integration '#{integration.join(', ')}' is not supported; " \
+                        "only '#{RECOVERY_INTEGRATION}'."],
+                       configuration: RECOVERY_CONFIGURATION)
+      end
+      if linked_ids.empty?
+        return _result(:missing_input, sys_id, ids, premises, nil, ['Missing LinkedDeliveryIDs.'],
+                       configuration: RECOVERY_CONFIGURATION)
+      end
+
+      recovery_links = Context.nodes(sys, 'OtherHVACSystems/OtherHVACSystem')
+                              .select { |o| _recovery?(sys, o, index) }
+                              .flat_map { |o| Context.nodes(o, 'LinkedDeliveryIDs/LinkedDeliveryID').map { |l| l.attributes['IDref'] } }
+      conflicts = linked_ids.reject { |id| index[:delivery].key?(id) }
+                            .map { |id| "LinkedDeliveryID '#{id}' does not resolve to a Delivery" }
+      conflicts += linked_ids.select { |id| recovery_links.count(id) > 1 }.uniq
+                             .map { |id| "Delivery '#{id}' is linked more than once by recovery records" }
+      return _result(:conflicting_input, sys_id, ids, premises, nil, conflicts, configuration: RECOVERY_CONFIGURATION) unless conflicts.empty?
+
+      contexts = linked_ids.map { |id| Context.new(sys, index[:delivery][id], index) }
+      x_probe = Context.new(sys, other, index)
+      mv = x_probe.mv(other)
+      failures = contexts.reject { |x| x.exists(x.d, 'DeliveryType/CentralAirDistribution') }
+                         .map { |x| "Delivery '#{x.d.attributes['ID']}' must be central air distribution" }
+      failures += ['MakeupAirSourceID', 'VentilationControlMethods', 'VentilationZoneControl']
+                  .select { |p| x_probe.exists(mv, p) }.map { |p| "MV/#{p} must be absent" }
+      failures << 'Guard failed: MV/DemandControlVentilation' unless x_probe.guard(mv, 'DemandControlVentilation', ['false', '0'])
+      failures << 'Guard failed: O/PrimaryFuel' unless x_probe.guard(other, 'PrimaryFuel', ELECTRIC)
+      return _result(:conflicting_input, sys_id, ids, premises, nil, failures, configuration: RECOVERY_CONFIGURATION) unless failures.empty?
+
+      _result(:match, sys_id, ids, premises, [:recovery, other.attributes['ID']], [],
+              configuration: RECOVERY_CONFIGURATION, measure: RECOVERY_MEASURE)
+    end
+
     def _explicit_no_hvac?(x)
       !x.d.nil? && x.exists(x.h, 'NoHeating') && x.exists(x.c, 'NoCooling') && x.absent(x.d, 'DeliveryType')
     end
@@ -546,7 +600,7 @@ module BOSS
     # Ventilation annotations own their linked deliveries only when every one is explicitly
     # unconditioned; otherwise those deliveries are still evaluated as conditioning deliveries.
     def _consumes_deliveries?(sys, other, index)
-      return false if _integrated?(other)
+      return false if _integrated?(other) || _recovery?(sys, other, index)
       return true unless _ventilation_annotation?(other)
 
       ids = Context.nodes(other, 'LinkedDeliveryIDs/LinkedDeliveryID').map { |l| l.attributes['IDref'] }
@@ -655,6 +709,8 @@ module BOSS
       end
 
       ventilation_type = ventilation_type.first
+      return _select_recovery(sys, other, index, ids, linked_ids, premises) if RECOVERY_TYPES.include?(ventilation_type)
+
       if NOT_MAPPABLE_OTHER.key?(ventilation_type)
         configuration = NOT_MAPPABLE_OTHER[ventilation_type]
         return _result(:not_mappable, sys_id, ids, premises, nil,
