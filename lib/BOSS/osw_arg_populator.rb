@@ -290,6 +290,42 @@ class OSWArgPopulator
 
   end
 
+  def self.populate_set_infiltration_by_ach_args(osw, bsync_reader)
+    BOSS.BOSS_logger.info("+++++++++++++++++++++ populating measure set_infiltration_by_ach +++++++++++++++++++++")
+    osw[:steps].append({"measure_dir_name": "set_infiltration_by_ach", "arguments": {}})
+    set_measure_argument = lambda {| key, value | OpenStudio::Extension.set_measure_argument(osw, "set_infiltration_by_ach", key, value) }
+
+    BOSS.BOSS_logger.info("|\t- gathering measure requirements...")
+    BOSS.BOSS_logger.info("|\t|\t- getting air infiltration value...")
+    input_type, ach_value = bsync_reader.get_air_infiltration_value
+
+    # skip if no input_type
+    if input_type.nil?
+      BOSS.BOSS_logger.info("|\t|\t- skipping measure...")
+      set_measure_argument.call("__SKIP__", true)
+      return
+    end
+
+    # -  __SKIP__
+    set_measure_argument.call("__SKIP__", false)
+    # -  input_type
+    BOSS.BOSS_logger.info("|\t- setting arg 'input_type'...")
+    BOSS.BOSS_logger.info("|\t  set to #{input_type}")
+    set_measure_argument.call("input_type", input_type)
+    # -  ach_value
+    BOSS.BOSS_logger.info("|\t- setting arg 'ach_value'...")
+    BOSS.BOSS_logger.info("|\t  set to #{ach_value}")
+    set_measure_argument.call("ach_value", ach_value)
+    # -  n_factor
+    BOSS.BOSS_logger.info("|\t- setting arg 'n_factor'...")
+    BOSS.BOSS_logger.info("|\t  defaults to '20'")
+    set_measure_argument.call("n_factor", "20")
+
+    BOSS.BOSS_logger.info("++++++++++++++++++++++++++++++++++ populated. +++++++++++++++++++++++++++++++++++++++")
+    BOSS.BOSS_logger.info("")
+  end
+
+
   def self.populate_openstudio_results_args(osw, bsync_reader)
     BOSS.BOSS_logger.info("+++++++++++++++++++++++++ populating measure openstudio_results +++++++++++++++++++++")
     osw[:steps].append({"measure_dir_name": "openstudio_results", "arguments": {}})
