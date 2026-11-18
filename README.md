@@ -49,7 +49,37 @@ The generated `in.osw` will include these paths in order under `measure_paths`.
 
 ### Baseline HVAC
 
-When the facility's `HVACSystems` describe a supported topology (currently packaged rooftop heat pump), the baseline sets `create_typical_building_from_model`'s `add_hvac` to `false` and adds `apply_hvac_topology_to_zone_scope` and `apply_standard_hvac_sizing_and_efficiency` from buildingsync-measures-gem. Supported templates are DOE Ref Pre-1980, DOE Ref 1980-2004, and 90.1-2004 through 90.1-2019. HVAC systems referenced by measures as proposed (`AlternativeSystemReplacement` or `ModifiedSystem`) are excluded from the baseline. Otherwise BOSS falls back to the `system_type` mapping below with `add_hvac` set to `true`, and logs a warning explaining the fallback.
+When the facility's detailed (L200) `HVACSystems` exactly match a supported topology, the baseline sets `create_typical_building_from_model`'s `add_hvac` to `false` and adds `apply_hvac_topology_to_zone_scope` (operation `create`) and `apply_standard_hvac_sizing_and_efficiency` from buildingsync-measures-gem. Supported templates are DOE Ref Pre-1980, DOE Ref 1980-2004, and 90.1-2004 through 90.1-2019. HVAC systems referenced by measures as proposed (`AlternativeSystemReplacement` or `ModifiedSystem`) are excluded from the baseline.
+
+Configurations that can produce a topology baseline:
+
+| Configuration | Topology measure |
+|---|---|
+| Packaged Terminal Air Conditioner | `hvac_ptac` |
+| Packaged Terminal Heat Pump | `hvac_pthp` |
+| Four Pipe Fan Coil Unit | `hvac_four_pipe_fan_coil` |
+| Packaged Rooftop Air Conditioner | `hvac_packaged_rooftop_ac` |
+| Packaged Rooftop Heat Pump | `hvac_packaged_rooftop_heat_pump` |
+| Packaged Rooftop VAV with Hot Water Reheat | `hvac_packaged_rooftop_vav_hw_reheat` |
+| VAV with Hot Water Reheat | `hvac_vav_hw_reheat` |
+| Warm Air Furnace | `hvac_warm_air_furnace` |
+| VRF Terminal Unit | `hvac_vrf` |
+
+A Ventilation Only (`hvac_ventilation_only`) or Dedicated Outdoor Air System (`hvac_doas`) configuration can be added on top, but only alongside PTAC, PTHP, four-pipe fan coil, or VRF.
+
+Recognized but not yet mapped (always fall back): Packaged Rooftop VAV with Electric Reheat, VAV with Electric Reheat, Water Loop Heat Pump, Ground Source Heat Pump, Chilled Beam, and hydronic radiant systems.
+
+BOSS also falls back when:
+
+- any selected `HVACSystem` does not match a supported configuration;
+- there is not exactly one conditioning configuration, or there is more than one ventilation configuration;
+- ventilation is paired with a conditioning type that does not allow it;
+- the template is not supported;
+- a system's premises are scoped to specific zones rather than the whole building (the baseline binds topologies to all model zones only).
+
+On fallback, BOSS uses the `system_type` mapping below with `add_hvac` set to `true`, and logs a warning explaining why.
+
+Integration simulations currently cover the packaged rooftop heat pump; the other configurations are covered by unit specs.
 
 ## OpenStudio Compatibility Version
 
