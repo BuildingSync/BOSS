@@ -15,8 +15,8 @@ require 'BOSS/hvac_target_binder'
 RSpec.describe BOSS::HvacTargetBinder do
   def match_result(premises, measure: 'hvac_ptac')
     BOSS::HvacTopologySelector::Result.new(
-      status: :match, configuration: 'Packaged Terminal Air Conditioner', measure: measure,
-      hvac_system_id: 'HVAC-1', record_ids: ['D-1'], premises: premises, group_key: [:delivery, 'D-1'], messages: []
+      status: :match, configuration: 'Packaged Terminal Air Conditioner', measure:,
+      hvac_system_id: 'HVAC-1', record_ids: ['D-1'], premises:, group_key: [:delivery, 'D-1'], messages: []
     )
   end
 
@@ -24,7 +24,7 @@ RSpec.describe BOSS::HvacTargetBinder do
 
   ['Building', 'Site', 'Facility'].each do |type|
     it "binds #{type} premises to all model zones through the runtime binding measure" do
-      binding = binder.bind(match_result([{ type: type, id: "#{type}-1" }]),
+      binding = binder.bind(match_result([{ type:, id: "#{type}-1" }]),
                             operation: 'replace', standards_template: '90.1-2016')
       expect(binding.status).to eq(:bound)
       expect(binding.step).to eq(

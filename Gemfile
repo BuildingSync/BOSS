@@ -1,5 +1,5 @@
-source "https://rubygems.org"
+source 'https://rubygems.org'
 
 gemspec
 
-#gem 'openstudio-extension', path: '../OpenStudio-extension-gem'
+# gem 'openstudio-extension', path: '../OpenStudio-extension-gem'

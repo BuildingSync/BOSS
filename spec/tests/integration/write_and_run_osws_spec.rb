@@ -15,7 +15,7 @@ test_configs = [
   ['179D_Example_Building.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['BETTER-1.0.0_SampleOffice_gemtest.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['building_151.xml', ASHRAE90_1, nil, 'v2.7.0'],
-  #['BuildingEQ-1.0.0_gemtest.xml', ASHRAE90_1, nil, 'v2.7.0'], # this file errors with the following: [openstudio.model.Model] The run did not finish and had following errors: SizeAirLoopBranches: AirLoopHVAC ZONE MIDRISEAPARTMENT CORRIDOR B END_A - STORY B1 PSZ-AC has air flow less than 1.0000E-003 m3/s.
+  # ['BuildingEQ-1.0.0_gemtest.xml', ASHRAE90_1, nil, 'v2.7.0'], # this file errors with the following: [openstudio.model.Model] The run did not finish and had following errors: SizeAirLoopBranches: AirLoopHVAC ZONE MIDRISEAPARTMENT CORRIDOR B END_A - STORY B1 PSZ-AC has air flow less than 1.0000E-003 m3/s.
   ['BuildingEQ-1.0.0.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['Chula_Vista_ASHRAE_L1_Example_Building.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['Demo_ASHRAE_L2_Example_Building.xml', ASHRAE90_1, nil, 'v2.7.0'],
@@ -31,7 +31,7 @@ test_configs = [
   ['L100_Audit-1.0.0.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['L100_Pre-Simulation-1.0.0.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['NYC_BBL_AT_Demo_Property.xml', ASHRAE90_1, nil, 'v2.7.0'],
-  ['Reference-PrimarySchool-L100-Audit.xml', ASHRAE90_1, nil, 'v2.7.0'],
+  ['Reference-PrimarySchool-L100-Audit.xml', ASHRAE90_1, nil, 'v2.7.0']
 ]
 
 # BOSS_SMOKE=1 runs a small representative subset (used on pull requests).
@@ -62,7 +62,7 @@ RSpec.describe 'BOSS' do
       it "write and run baseline osw. File: #{file_name}, Standard: #{standard}, EPW_Path: #{epw_path}, File Schema Version: #{schema_version}" do
         # Set Up
         xml_path = File.join(SPEC_FILES_DIR, schema_version, file_name)
-        output_path = File.join(SPEC_OUTPUT_DIR, schema_version, "write_and_run_baseline_osw" , "#{File.basename(xml_path, File.extname(xml_path))}")
+        output_path = File.join(SPEC_OUTPUT_DIR, schema_version, 'write_and_run_baseline_osw', "#{File.basename(xml_path, File.extname(xml_path))}")
         puts output_path
 
         # Action
@@ -71,13 +71,12 @@ RSpec.describe 'BOSS' do
 
         # Assertion
         puts output_path
-        expect(File.exist?(output_path + "/baseline")).to be true
-        expect(File.exist?(output_path + "/baseline/out.osw")).to be true
-        out_osw = File.read(output_path + "/baseline/out.osw")
+        expect(File.exist?(output_path + '/baseline')).to be true
+        expect(File.exist?(output_path + '/baseline/out.osw')).to be true
+        out_osw = File.read(output_path + '/baseline/out.osw')
         out_osw = JSON.parse(out_osw, symbolize_names: true)
-        expect(out_osw[:completed_status]).to eq "Success"
+        expect(out_osw[:completed_status]).to eq 'Success'
       end
-
     end
 
     next unless run_extra_examples

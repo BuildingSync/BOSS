@@ -21,13 +21,12 @@ module BOSS
 
       #  get namespace
       ns = @bsync_doc.elements[1].prefix
-      @ns = ns.nil? || ns == ""? nil : ns + ":"
+      @ns = ns.nil? || ns == '' ? nil : ns + ':'
 
       # just some convenience attr
       @facility_xml = @bsync_doc.elements["/#{@ns}BuildingSync/#{@ns}Facilities/#{@ns}Facility"]
       @site_xml = @facility_xml.elements["#{@ns}Sites/#{@ns}Site"]
       @building_xml = @site_xml.elements["#{@ns}Buildings/#{@ns}Building"]
-
     end
 
     # tries to get weather file from:
@@ -63,7 +62,7 @@ module BOSS
         BOSS.BOSS_logger.info("|\t|\t  climate_zone not found")
       end
 
-      message = "Could not set a weather file as neither climate zone not city/state could be found"
+      message = 'Could not set a weather file as neither climate zone not city/state could be found'
       raise StandardError, 'BOSS.BuildingSyncReader.get_epw_file_path ' + message
     end
 
@@ -76,11 +75,11 @@ module BOSS
       end
 
       def _format_climate_zone(climate_zone, type)
-        return "ASHRAE 169-2013-#{climate_zone}" if type == "ASHRAE"
-        return "CEC T24-CEC#{climate_zone.gsub('Climate Zone', '').strip}" if type == "CaliforniaTitle24"
+        return "ASHRAE 169-2013-#{climate_zone}" if type == 'ASHRAE'
+        return "CEC T24-CEC#{climate_zone.gsub('Climate Zone', '').strip}" if type == 'CaliforniaTitle24'
       end
 
-      preferred_type = @standard_to_be_used == ASHRAE90_1 ? "ASHRAE" : "CaliforniaTitle24"
+      preferred_type = @standard_to_be_used == ASHRAE90_1 ? 'ASHRAE' : 'CaliforniaTitle24'
 
       BOSS.BOSS_logger.info("|\t|\t|\t- checking building climate zone...")
       climate_zone = _get_climate_zone(@building_xml, preferred_type)
@@ -123,7 +122,7 @@ module BOSS
       occupancy_classification = @building_xml.elements["#{@ns}OccupancyClassification"]&.text
       return occupancy_classification if !occupancy_classification.nil?
 
-      section_elements = @building_xml.elements.each("#{@ns}Sections/#{@ns}Section"){|s| s}
+      section_elements = @building_xml.elements.each("#{@ns}Sections/#{@ns}Section") { |s| s }
       return nil if section_elements.nil?
 
       candidates = section_elements.filter_map do |section_element|
@@ -132,7 +131,7 @@ module BOSS
 
         section_floor_areas_xml = section_element.elements["#{@ns}FloorAreas"]
         section_floor_area = !section_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(section_floor_areas_xml) : 0
-        {occupancy_classification: section_occupancy_classification, floor_area: section_floor_area}
+        { occupancy_classification: section_occupancy_classification, floor_area: section_floor_area }
       end
       return nil if candidates.empty?
       return candidates.first[:occupancy_classification] if candidates.length == 1
@@ -147,7 +146,7 @@ module BOSS
       occupancy_classification = get_occupancy_classification
       BOSS.BOSS_logger.info("|\t|\t|\t  occupancy classification: #{occupancy_classification}")
       BOSS.BOSS_logger.info("|\t|\t|\t- getting total floor area...")
-      total_floor_area = get_total_floor_area(num_indent=4)
+      total_floor_area = get_total_floor_area(num_indent = 4)
       BOSS.BOSS_logger.info("|\t|\t|\t  total_floor_area: #{total_floor_area}")
       BOSS.BOSS_logger.info("|\t|\t|\t- getting number of floors...")
       total_number_floors = _get_total_number_floors
@@ -179,19 +178,19 @@ module BOSS
     #  1. /FloorAreas of building
     #  2. /FloorAreas of site
     # The building is more specific than the site, so its value wins when both are present.
-    def get_total_floor_area(num_indent=2)
+    def get_total_floor_area(num_indent = 2)
       # check building floor area
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking building for total floor area...")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}- checking building for total floor area...")
       building_floor_areas_xml = @building_xml.nil? ? nil : @building_xml.elements["#{@ns}FloorAreas"]
-      building_area = !building_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(building_floor_areas_xml, num_indent+1) : 0
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  building floor area is #{building_area}")
+      building_area = !building_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(building_floor_areas_xml, num_indent + 1) : 0
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}  building floor area is #{building_area}")
       return building_area if building_area > 0
 
       # check site floor area
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking site for total floor area...")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}- checking site for total floor area...")
       site_floor_areas_xml = @site_xml.elements["#{@ns}FloorAreas"]
-      site_area = !site_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(site_floor_areas_xml, num_indent+1) : 0
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  site floor area is #{site_area}")
+      site_area = !site_floor_areas_xml.nil? ? _get_total_floor_area_from_floor_areas_xml(site_floor_areas_xml, num_indent + 1) : 0
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}  site floor area is #{site_area}")
       return site_area if site_area > 0
 
       # TODO: read sections
@@ -202,7 +201,7 @@ module BOSS
     #  1. Gross floor area
     #  2. Sum of "Conditioned" + "Common" + "Heated and Cooled" + "Heated Only" + "Cooled Only" floor area
     #  3. Sum of "Conditioned above grade" + "Conditioned below grade" floor area
-    def _get_total_floor_area_from_floor_areas_xml(floor_areas_xml, num_indent=5)
+    def _get_total_floor_area_from_floor_areas_xml(floor_areas_xml, num_indent = 5)
       # build a hash of the floor area in meters, by type
       floor_area_by_type = {}
       floor_area_by_type.default = 0
@@ -215,21 +214,21 @@ module BOSS
       end
 
       # first, try to get it from simply "Gross"
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent} - checking gross floor area")
-      gross_floor_area = floor_area_by_type["Gross"]
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent} - gross floor area: #{gross_floor_area}")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent} - checking gross floor area")
+      gross_floor_area = floor_area_by_type['Gross']
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent} - gross floor area: #{gross_floor_area}")
       return gross_floor_area if gross_floor_area > 0
 
       # next, try to get it from "Conditioned" + "Common" + "Heated and Cooled" + "Heated Only" + "Cooled Only"
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent} - checking conditioned floor area")
-      conditioned_area = floor_area_by_type["Conditioned"] + floor_area_by_type["Common"] + floor_area_by_type["Heated and Cooled"] + floor_area_by_type["Heated Only"] + floor_area_by_type["Cooled Only"]
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent} - conditioned floor area: #{conditioned_area}")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent} - checking conditioned floor area")
+      conditioned_area = floor_area_by_type['Conditioned'] + floor_area_by_type['Common'] + floor_area_by_type['Heated and Cooled'] + floor_area_by_type['Heated Only'] + floor_area_by_type['Cooled Only']
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent} - conditioned floor area: #{conditioned_area}")
       return conditioned_area if conditioned_area > 0
 
       # next, try to get it from "Conditioned above grade" + "Conditioned below grade"
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent} - checking conditioned floor area (above + below)")
-      conditioned_area = floor_area_by_type["Conditioned above grade"] + floor_area_by_type["Conditioned below grade"]
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent} - conditioned floor area (above + below): #{conditioned_area}")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent} - checking conditioned floor area (above + below)")
+      conditioned_area = floor_area_by_type['Conditioned above grade'] + floor_area_by_type['Conditioned below grade']
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent} - conditioned floor area (above + below): #{conditioned_area}")
       return conditioned_area if conditioned_area > 0
 
       # thats all we got!
@@ -239,60 +238,59 @@ module BOSS
     # tries to get total number floor from:
     #  1. building's FloorsAboveGrade
     #  2. building's ConditionedFloorsAboveGrade + UnconditionedFloorsAboveGrade
-    def get_floor_above_grade(num_indent=2)
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking building floors above grade...")
+    def get_floor_above_grade(num_indent = 2)
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}- checking building floors above grade...")
       floors_above_grade = @building_xml.elements["#{@ns}FloorsAboveGrade"]&.text
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  floors above grade: #{floors_above_grade}")
-      return floors_above_grade.to_f  if !floors_above_grade.nil?
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}  floors above grade: #{floors_above_grade}")
+      return floors_above_grade.to_f if !floors_above_grade.nil?
 
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking building conditioned floors above grade and unconditioned floors above grade...")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}- checking building conditioned floors above grade and unconditioned floors above grade...")
       conditioned_floors_above_grade = @building_xml.elements["#{@ns}ConditionedFloorsAboveGrade"]&.text
       unconditioned_floors_above_grade = @building_xml.elements["#{@ns}UnconditionedFloorsAboveGrade"]&.text
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  conditioned floors above grade: #{conditioned_floors_above_grade}")
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  unconditioned floors above grade: #{unconditioned_floors_above_grade}")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}  conditioned floors above grade: #{conditioned_floors_above_grade}")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}  unconditioned floors above grade: #{unconditioned_floors_above_grade}")
       if !conditioned_floors_above_grade.nil? || !unconditioned_floors_above_grade.nil?
         return (conditioned_floors_above_grade.to_f || 0) + (unconditioned_floors_above_grade.to_f || 0)
       end
 
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- cannot find floors above grade")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}- cannot find floors above grade")
       return nil
     end
 
     # tries to get total number floor from:
     #  1. building's FloorsBelowGrade
     #  2. building's ConditionedFloorsBelowGrade + UnconditionedFloorsBelowGrade
-    def get_floor_below_grade(num_indent=2)
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking building floors below grade...")
+    def get_floor_below_grade(num_indent = 2)
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}- checking building floors below grade...")
       floors_below_grade = @building_xml.elements["#{@ns}FloorsBelowGrade"]&.text
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  floors below grade: #{floors_below_grade}")
-      return floors_below_grade.to_f  if !floors_below_grade.nil?
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}  floors below grade: #{floors_below_grade}")
+      return floors_below_grade.to_f if !floors_below_grade.nil?
 
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- checking building conditioned floors below grade and unconditioned floors below grade...")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}- checking building conditioned floors below grade and unconditioned floors below grade...")
       conditioned_floors_below_grade = @building_xml.elements["#{@ns}ConditionedFloorsBelowGrade"]&.text
       unconditioned_floors_below_grade = @building_xml.elements["#{@ns}UnconditionedFloorsBelowGrade"]&.text
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  conditioned floors below grade: #{conditioned_floors_below_grade}")
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}  unconditioned floors below grade: #{unconditioned_floors_below_grade}")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}  conditioned floors below grade: #{conditioned_floors_below_grade}")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}  unconditioned floors below grade: #{unconditioned_floors_below_grade}")
       if !conditioned_floors_below_grade.nil? || !unconditioned_floors_below_grade.nil?
         return (conditioned_floors_below_grade.to_f || 0) + (unconditioned_floors_below_grade.to_f || 0)
       end
 
-      BOSS.BOSS_logger.info("#{"|\t"*num_indent}- cannot find floors below grade")
+      BOSS.BOSS_logger.info("#{"|\t" * num_indent}- cannot find floors below grade")
       return nil
     end
 
     def _get_total_number_floors
       BOSS.BOSS_logger.info("|\t|\t|\t|\t- getting floors above grade...")
-      floors_above_grade = get_floor_above_grade(num_indent=5)
+      floors_above_grade = get_floor_above_grade(num_indent = 5)
       BOSS.BOSS_logger.info("|\t|\t|\t|\t  floors above grade: #{floors_above_grade}")
       BOSS.BOSS_logger.info("|\t|\t|\t|\t- getting floors below grade...")
-      floors_below_grade = get_floor_below_grade(num_indent=5)
+      floors_below_grade = get_floor_below_grade(num_indent = 5)
       BOSS.BOSS_logger.info("|\t|\t|\t|\t  floors below grade: #{floors_below_grade}")
 
-      return (floors_above_grade || 1) +  (floors_below_grade || 0)
+      return (floors_above_grade || 1) + (floors_below_grade || 0)
     end
 
-
-      # tries to get year built from:
+    # tries to get year built from:
     #  1. /YearOfLastMajorRemodel of building
     #  2. /YearOfConstruction of building
     def get_built_year
@@ -304,32 +302,34 @@ module BOSS
       BOSS.BOSS_logger.info("|\t|\t|\t|\t- checking year of construction...")
       year_of_construction = @building_xml.elements["#{@ns}YearOfConstruction"]&.text
       BOSS.BOSS_logger.info("|\t|\t|\t|\t  year of construction: #{year_of_construction}...")
-       return year_of_construction.to_f if !year_of_construction.nil?
+      return year_of_construction.to_f if !year_of_construction.nil?
     end
 
     #  map year built and standard_to_be_used to a standard_template
     def get_standard_template
       def _get_standard_template(built_year)
         if @standard_to_be_used == CA_TITLE24
-          return "DEER Pre-1975" if built_year < 1975
-          return "DEER 1985" if built_year >= 1975 && built_year < 1985
-          return "DEER 1996" if built_year >= 1985 && built_year < 1996
-          return "DEER 2003" if built_year >= 1996 && built_year < 2003
-          return "DEER 2007" if built_year >= 2003 && built_year < 2007
-          return "DEER 2011" if built_year >= 2007 && built_year < 2011
-          return "DEER 2014" if built_year >= 2011 && built_year < 2014
-          return "DEER 2015" if built_year >= 2014 && built_year < 2015
-          return "DEER 2017" if built_year >= 2015 && built_year < 2017
-          return "DEER 2020"
+          return 'DEER Pre-1975' if built_year < 1975
+          return 'DEER 1985' if built_year >= 1975 && built_year < 1985
+          return 'DEER 1996' if built_year >= 1985 && built_year < 1996
+          return 'DEER 2003' if built_year >= 1996 && built_year < 2003
+          return 'DEER 2007' if built_year >= 2003 && built_year < 2007
+          return 'DEER 2011' if built_year >= 2007 && built_year < 2011
+          return 'DEER 2014' if built_year >= 2011 && built_year < 2014
+          return 'DEER 2015' if built_year >= 2014 && built_year < 2015
+          return 'DEER 2017' if built_year >= 2015 && built_year < 2017
 
-        elsif (@standard_to_be_used == ASHRAE90_1)
-          return "DOE Ref Pre-1980" if built_year < 1980
-          return "DOE Ref 1980-2004" if built_year >= 1980 && built_year < 2004
-          return "90.1-2007" if built_year >= 2004 && built_year < 2007
-          return "90.1-2010" if built_year >= 2007 && built_year < 2010
-          return "90.1-2013" if built_year >= 2010 && built_year < 2013
-          return "90.1-2016" if built_year >= 2013 && built_year < 2016
-          return "90.1-2019"
+          return 'DEER 2020'
+
+        elsif @standard_to_be_used == ASHRAE90_1
+          return 'DOE Ref Pre-1980' if built_year < 1980
+          return 'DOE Ref 1980-2004' if built_year >= 1980 && built_year < 2004
+          return '90.1-2007' if built_year >= 2004 && built_year < 2007
+          return '90.1-2010' if built_year >= 2007 && built_year < 2010
+          return '90.1-2013' if built_year >= 2010 && built_year < 2013
+          return '90.1-2016' if built_year >= 2013 && built_year < 2016
+
+          return '90.1-2019'
         end
       end
 
@@ -346,9 +346,10 @@ module BOSS
 
     def get_floor_to_floor_height
       BOSS.BOSS_logger.info("|\t|\t- checking the floor height of every section in building from file...")
-      section_elements = @building_xml.elements.each("#{@ns}Sections/#{@ns}Section"){|s| s}
+      section_elements = @building_xml.elements.each("#{@ns}Sections/#{@ns}Section") { |s| s }
       return nil if section_elements.nil?
-      floor_to_floor_heights = section_elements.map {|section_element| section_element.elements["#{@ns}FloorToFloorHeight"]&.text.to_f}
+
+      floor_to_floor_heights = section_elements.map { |section_element| section_element.elements["#{@ns}FloorToFloorHeight"]&.text.to_f }
       BOSS.BOSS_logger.info("|\t|\t  section floor heights: #{floor_to_floor_heights}")
 
       return floor_to_floor_heights.first
@@ -357,6 +358,7 @@ module BOSS
     def get_aspect_ratio
       aspect_ratio = @building_xml.elements["#{@ns}AspectRatio"]&.text
       return nil if aspect_ratio.nil?
+
       return aspect_ratio.to_f
     end
 
@@ -370,16 +372,16 @@ module BOSS
     def get_principal_HVAC_system_type
       BOSS.BOSS_logger.info("|\t|\t- finding first hvac system with principal hvac system type...")
       # if no hvac systems, return nil
-      hvac_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}HVACSystems/#{@ns}HVACSystem") {|s| s}
+      hvac_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}HVACSystems/#{@ns}HVACSystem") { |s| s }
       if hvac_systems.nil?
         BOSS.BOSS_logger.info("|\t|\t  no hvac systems found")
         return nil
       end
 
       # find first none nil principal_HVAC_system_type
-      hvac_systems = hvac_systems.reject {|s| s.class == REXML::Comment}
-      principal_HVAC_system_type = hvac_systems.map {|s| s.elements["#{@ns}PrincipalHVACSystemType/"]&.text}
-      first_principal_HVAC_system_type = principal_HVAC_system_type.find {|x| !x.nil?}
+      hvac_systems = hvac_systems.reject { |s| s.instance_of?(REXML::Comment) }
+      principal_HVAC_system_type = hvac_systems.map { |s| s.elements["#{@ns}PrincipalHVACSystemType/"]&.text }
+      first_principal_HVAC_system_type = principal_HVAC_system_type.find { |x| !x.nil? }
 
       # if none, return nil, else return mapping
       if first_principal_HVAC_system_type.nil?
@@ -401,20 +403,21 @@ module BOSS
     def get_total_installed_power
       # if no lighting systems, return nil
       BOSS.BOSS_logger.info("|\t|\t|\t- finding all lighting system installed power...")
-      lighting_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}LightingSystems/#{@ns}LightingSystem") {|s| s}
+      lighting_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}LightingSystems/#{@ns}LightingSystem") { |s| s }
       if lighting_systems.nil?
         BOSS.BOSS_logger.info("|\t|\t|\t  no lighting systems found")
         return nil
       end
 
       # get all all_installed_powers
-      lighting_systems = lighting_systems.reject {|s| s.class == REXML::Comment}
-      all_installed_powers = lighting_systems.map {|s| s.elements["#{@ns}InstalledPower/"]&.first&.to_s&.to_f}
+      lighting_systems = lighting_systems.reject { |s| s.instance_of?(REXML::Comment) }
+      all_installed_powers = lighting_systems.map { |s| s.elements["#{@ns}InstalledPower/"]&.first&.to_s&.to_f }
       BOSS.BOSS_logger.info("|\t|\t|\t  all lighting system installed power: #{all_installed_powers}")
 
       # if any nil, return nil, else return sum
       return nil if all_installed_powers.length == 0
       return nil if !all_installed_powers.all?
+
       return all_installed_powers.sum
     end
 
@@ -423,30 +426,31 @@ module BOSS
     def get_total_weighted_average_load
       # if no plug_loads, return nil
       BOSS.BOSS_logger.info("|\t|\t|\t- finding all plug load systems weighted average load...")
-      plug_loads = @facility_xml.elements.each("#{@ns}Systems/#{@ns}PlugLoads/#{@ns}PlugLoad") {|s| s}
+      plug_loads = @facility_xml.elements.each("#{@ns}Systems/#{@ns}PlugLoads/#{@ns}PlugLoad") { |s| s }
       if plug_loads.nil?
         BOSS.BOSS_logger.info("|\t|\t|\t  no plug load systems found")
         return nil
       end
       # get all weighted_average_loads
-      plug_loads = plug_loads.reject {|s| s.class == REXML::Comment}
-      all_weighted_average_loads = plug_loads.map {|s| s.elements["#{@ns}WeightedAverageLoad/"]&.text}
+      plug_loads = plug_loads.reject { |s| s.instance_of?(REXML::Comment) }
+      all_weighted_average_loads = plug_loads.map { |s| s.elements["#{@ns}WeightedAverageLoad/"]&.text }
       BOSS.BOSS_logger.info("|\t|\t|\t  all plug load system weighted average load: #{all_weighted_average_loads}")
 
       # if any nil, return nil, else return sum
       return nil if all_weighted_average_loads.length == 0
       return nil if !all_weighted_average_loads.all?
-      return all_weighted_average_loads.map {|s| s.to_f}.sum
+
+      return all_weighted_average_loads.map { |s| s.to_f }.sum
     end
 
     # first valid window that has all mappable fields
     def get_window_data
       # if no windows, return nil
-      fenestration_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}FenestrationSystems/#{@ns}FenestrationSystem") {|s| s}
+      fenestration_systems = @facility_xml.elements.each("#{@ns}Systems/#{@ns}FenestrationSystems/#{@ns}FenestrationSystem") { |s| s }
       return nil if fenestration_systems.nil?
 
       # get all windows
-      windows = fenestration_systems.select {|fs| fs.elements["#{@ns}FenestrationType/#{@ns}Window"] }
+      windows = fenestration_systems.select { |fs| fs.elements["#{@ns}FenestrationType/#{@ns}Window"] }
       return nil if windows.empty?
 
       # iter through windows until we get one with all the required fields
@@ -471,19 +475,18 @@ module BOSS
         os_fenestration_glass_layers = BuildingSyncToOSSystemMaps.get_glass_layers_map[fenestration_glass_layers.to_s]
 
         # return if we can use this one
-        if (
-          !os_fenestration_frame_material.nil? &&
-          !os_glass_type.nil? &&
-          !os_fenestration_glass_layers.nil? &&
-          !fenestration_u_factor.nil? &&
-          !solar_heat_gain_coefficient.nil? &&
-          !visible_transmittance.nil?
-        )
+        if !os_fenestration_frame_material.nil? &&
+           !os_glass_type.nil? &&
+           !os_fenestration_glass_layers.nil? &&
+           !fenestration_u_factor.nil? &&
+           !solar_heat_gain_coefficient.nil? &&
+           !visible_transmittance.nil?
+
           window_pane_type = [os_fenestration_glass_layers, os_glass_type, os_fenestration_frame_material].join(' - ')
           return window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance
         end
       end
-    return nil
+      return nil
+    end
   end
-end
 end

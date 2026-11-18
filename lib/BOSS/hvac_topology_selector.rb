@@ -659,7 +659,7 @@ module BOSS
         configuration = NOT_MAPPABLE_OTHER[ventilation_type]
         return _result(:not_mappable, sys_id, ids, premises, nil,
                        ["#{configuration}: no buildingsync-measures-gem measure creates this equipment."],
-                       configuration: configuration)
+                       configuration:)
       end
 
       if _integrated?(other)
@@ -725,9 +725,9 @@ module BOSS
       failures << 'Guard failed: MV/DemandControlVentilation' unless x_probe.guard(mv, 'DemandControlVentilation', ['false', '0'])
       failures << 'Guard failed: O/PrimaryFuel' unless x_probe.guard(other, 'PrimaryFuel', ELECTRIC)
       failures << 'Guard failed: O/Quantity' unless x_probe.quantity_guard(other, 'Quantity')
-      return _result(:conflicting_input, sys_id, ids, premises, nil, failures, configuration: configuration) unless failures.empty?
+      return _result(:conflicting_input, sys_id, ids, premises, nil, failures, configuration:) unless failures.empty?
 
-      _result(:match, sys_id, ids, premises, [:other, other_id], [], configuration: configuration, measure: measure)
+      _result(:match, sys_id, ids, premises, [:other, other_id], [], configuration:, measure:)
     end
 
     def _group_key(group, x)
@@ -750,16 +750,16 @@ module BOSS
         linked.elements.to_a.flat_map do |premise_type|
           premise_type.elements.to_a.filter_map do |link|
             id = link.attributes['IDref']
-            { type: premise_type.name, id: id } if id
+            { type: premise_type.name, id: } if id
           end
         end
       end
     end
 
     def _result(status, sys_id, ids, premises, group_key, messages, configuration: nil, measure: nil, measure_arguments: {})
-      Result.new(status: status, configuration: configuration, measure: measure, hvac_system_id: sys_id,
-                 record_ids: ids.compact.uniq, premises: premises, group_key: group_key, messages: messages,
-                 measure_arguments: measure_arguments)
+      Result.new(status:, configuration:, measure:, hvac_system_id: sys_id,
+                 record_ids: ids.compact.uniq, premises:, group_key:, messages:,
+                 measure_arguments:)
     end
   end
 end

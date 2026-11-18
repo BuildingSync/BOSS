@@ -24,18 +24,18 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.add_dependency 'bundler', '~> 2.4.10'
+  spec.add_dependency 'httparty', '~> 0.23.2'
   spec.add_dependency 'openstudio-common-measures', '~> 0.12.3'
   spec.add_dependency 'openstudio-ee', '~> 0.12.5'
   spec.add_dependency 'openstudio-extension', '~> 0.9.4'
   spec.add_dependency 'openstudio-model-articulation', '~> 0.12.2'
   spec.add_dependency 'openstudio-standards', '~> 0.8.2'
-  spec.add_dependency 'httparty', '~> 0.23.2'
   spec.add_dependency 'thor', '~> 1.5.0'
 
+  spec.add_development_dependency 'pry', '~> 0.15.2'
   spec.add_development_dependency 'rake', '~> 13.0'
   spec.add_development_dependency 'rspec', '~> 3.13'
   spec.add_development_dependency 'rubocop', '1.50'
   spec.add_development_dependency 'rubocop-checkstyle_formatter', '0.6.0'
   spec.add_development_dependency 'rubocop-performance', '1.20.0'
-  spec.add_development_dependency 'pry', '~> 0.15.2'
 end

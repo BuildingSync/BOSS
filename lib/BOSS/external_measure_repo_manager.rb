@@ -119,7 +119,7 @@ module BOSS
         raise StandardError, "Each repo entry in #{@manifest_path} must be a map"
       end
 
-      required = repo.key?('local_path') ? %w[name local_path measure_roots] : %w[name url ref measure_roots]
+      required = repo.key?('local_path') ? ['name', 'local_path', 'measure_roots'] : ['name', 'url', 'ref', 'measure_roots']
       missing = required.select { |key| repo[key].nil? || repo[key].to_s.empty? }
       if !missing.empty?
         raise StandardError, "Repo entry is missing required keys #{missing.join(', ')} in #{@manifest_path}"
@@ -160,16 +160,16 @@ module BOSS
       measure_roots = repo_entry['measure_roots']
 
       if Dir.exist?(File.join(repo_dir, '.git'))
-        run_git(%W[-C #{repo_dir} remote set-url origin #{repo_entry['url']}])
+        run_git(['-C', "#{repo_dir}", 'remote', 'set-url', 'origin', "#{repo_entry['url']}"])
       else
         FileUtils.mkdir_p(File.dirname(repo_dir))
-        run_git(%W[clone --filter=blob:none --no-checkout #{repo_entry['url']} #{repo_dir}])
+        run_git(['clone', '--filter=blob:none', '--no-checkout', "#{repo_entry['url']}", "#{repo_dir}"])
       end
 
-      run_git(%W[-C #{repo_dir} sparse-checkout init --cone])
+      run_git(['-C', "#{repo_dir}", 'sparse-checkout', 'init', '--cone'])
       run_git(['-C', repo_dir, 'sparse-checkout', 'set', *measure_roots])
-      run_git(%W[-C #{repo_dir} fetch --depth 1 origin #{repo_entry['ref']}])
-      run_git(%W[-C #{repo_dir} checkout --force FETCH_HEAD])
+      run_git(['-C', "#{repo_dir}", 'fetch', '--depth', '1', 'origin', "#{repo_entry['ref']}"])
+      run_git(['-C', "#{repo_dir}", 'checkout', '--force', 'FETCH_HEAD'])
     end
 
     def local_repo?(repo_entry)

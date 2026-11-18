@@ -22,8 +22,8 @@ module BOSS
     def self.download_weather_file_from_city_name(city_name, state_name)
       # from BCL, get closest weather station to city
       response = HTTParty.get("#{@@base_BCL_uri}/location:#{city_name.gsub(' ', '+')},#{state_name}.xml?fq=component_tags:\"Weather File\"")
-      results = REXML::Document.new(response.body, {ignore_whitespace_nodes: :all, compress_whitespace: :all}).elements["results"]
-      results = results.children.filter {|x| x.name == "result"}
+      results = REXML::Document.new(response.body, { ignore_whitespace_nodes: :all, compress_whitespace: :all }).elements['results']
+      results = results.children.filter { |x| x.name == 'result' }
 
       if results.empty?
         raise StandardError, "No weather files found within a 40 mile radius #{city_name},#{state_name} within the BCL."
@@ -31,10 +31,10 @@ module BOSS
 
       # just pick the closest
       result = results[0]
-      filenames = result.elements["component/files"].children.map {|x| x.elements["filename"].text}
+      filenames = result.elements['component/files'].children.map { |x| x.elements['filename'].text }
       filename = filenames[0]
-      filename[".epw"] = ""
-      state_name = filename.split("_")[1]
+      filename['.epw'] = ''
+      state_name = filename.split('_')[1]
 
       # from ep, get the zip
       uri = "#{@@base_EP_uri}/USA/#{state_name}/#{filename}/#{filename}.zip"
@@ -50,7 +50,7 @@ module BOSS
       end
 
 
-      return  File.join(WEATHER_DIR, filename + ".epw")
+      return File.join(WEATHER_DIR, filename + '.epw')
     end
   end
 end
