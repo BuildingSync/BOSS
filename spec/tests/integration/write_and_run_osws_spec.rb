@@ -39,12 +39,15 @@ SMOKE_FILES = ['building_151.xml', 'example-smalloffice-level1.xml'].freeze
 test_configs = test_configs.select { |config| SMOKE_FILES.include?(config[0]) } if ENV['BOSS_SMOKE'] == '1'
 
 # BOSS_SHARD / BOSS_SHARDS split the fixtures across parallel CI jobs.
+run_extra_examples = ENV['BOSS_SMOKE'] != '1'
 if ENV['BOSS_SHARDS']
   shards = Integer(ENV['BOSS_SHARDS'])
   shard = Integer(ENV.fetch('BOSS_SHARD', '0'))
   raise ArgumentError, "BOSS_SHARD must be in 0...#{shards}" if shards < 1 || shard.negative? || shard >= shards
 
   test_configs = test_configs.select.with_index { |_config, index| index % shards == shard }
+  # Examples outside test_configs run once, in shard 0.
+  run_extra_examples &&= shard.zero?
 end
 
 RSpec.describe 'BOSS' do
@@ -76,6 +79,8 @@ RSpec.describe 'BOSS' do
       end
 
     end
+
+    next unless run_extra_examples
 
     {
       'example-smalloffice-level2.xml' => ['smalloffice_l2_topology_doe_ref', 'DOE Ref 1980-2004'],
