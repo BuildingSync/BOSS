@@ -250,7 +250,7 @@ RSpec.describe BOSS::HvacTopologySelector do
   describe 'ventilation and other HVAC systems' do
     ventilation_delivery = "<Delivery ID=\"D-V\">#{premises}<DeliveryType>#{single_zone_cav}</DeliveryType>" \
                            '<HeatingSourceID IDref="HS-V"/><CoolingSourceID IDref="CS-V"/></Delivery>'
-    other = lambda do |type_xml, links: '<LinkedDeliveryIDs><LinkedDeliveryID IDref="D-V"/></LinkedDeliveryIDs>', integration: 'Stand-alone',|
+    other = lambda do |type_xml, links: '<LinkedDeliveryIDs><LinkedDeliveryID IDref="D-V"/></LinkedDeliveryIDs>', integration: 'Stand-alone'|
       "<OtherHVACSystems><OtherHVACSystem ID=\"O-1\"><OtherHVACType>#{type_xml}</OtherHVACType>" \
         "<Integration>#{integration}</Integration>#{links}</OtherHVACSystem></OtherHVACSystems>"
     end
