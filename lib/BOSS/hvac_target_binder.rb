@@ -58,10 +58,10 @@ module BOSS
 
     def step(result, operation, standards_template, zone_names)
       scope = zone_names ? { zone_scope: 'explicit_zone_names', zone_names_json: JSON.generate(zone_names.uniq) } : { zone_scope: 'all_model_zones' }
-      arguments = { topology_measure: result.measure, operation:, **scope, standards_template: }
+      arguments = { topology_measure: result.measure, operation: operation, **scope, standards_template: standards_template }
       extra = result.measure_arguments || {}
       arguments[:topology_arguments_json] = JSON.generate(extra) if !extra.empty?
-      { measure_dir_name: BINDING_MEASURE, arguments: }
+      { measure_dir_name: BINDING_MEASURE, arguments: arguments }
     end
   end
 end

@@ -208,7 +208,7 @@ RSpec.describe BOSS::Boss do
                         scenario_only: ['/bsync/measures'])
       steps = [{ measure_dir_name: 'apply_hvac_topology_to_zone_scope', arguments: { topology_measure: 'hvac_ptac' } },
                { measure_dir_name: 'apply_standard_hvac_sizing_and_efficiency', arguments: {} }]
-      plan = BOSS::BaselineHvacPlanner::Plan.new(status: :topology, steps:, messages: [])
+      plan = BOSS::BaselineHvacPlanner::Plan.new(status: :topology, steps: steps, messages: [])
       allow_any_instance_of(BOSS::BaselineHvacPlanner).to receive(:plan).and_return(plan)
 
       osw = described_class.send(:build_baseline_osw, build_reader('all_measures_applied_example.xml'))
@@ -238,7 +238,7 @@ RSpec.describe BOSS::Boss do
       typical = names.index('create_typical_building_from_model')
 
       expect(osw[:steps][typical][:arguments][:add_hvac]).to be false
-      expect(names[typical + 1, 2]).to eq ['apply_hvac_topology_to_zone_scope', 'apply_standard_hvac_sizing_and_efficiency']
+      expect(names[typical + 1, 2]).to eq %w[apply_hvac_topology_to_zone_scope apply_standard_hvac_sizing_and_efficiency]
       expect(osw[:steps][typical + 1][:arguments]).to include(zone_scope: 'all_model_zones', operation: 'create')
     end
 
@@ -303,6 +303,7 @@ RSpec.describe BOSS::Boss do
     end
     it 'places local measures first, then gem-provided measures, then external repo measures' do
       Dir.mktmpdir do |output_dir|
+
         # Simulate OpenStudio::Extension.configure_osw adding gem-provided paths.
         allow(OpenStudio::Extension).to receive(:configure_osw) do |osw|
           osw[:measure_paths] = [gem_measure_dir]
@@ -323,17 +324,18 @@ RSpec.describe BOSS::Boss do
         gem_idx      = measure_paths.index(gem_measure_dir)
         external_idx = measure_paths.index(external_measure_dir)
 
-        expect(local_idx).not_to    be_nil, 'local measures dir should appear in measure_paths'
-        expect(gem_idx).not_to      be_nil, 'gem measures dir should appear in measure_paths'
-        expect(external_idx).not_to be_nil, 'external repo measures dir should appear in measure_paths'
+        expect(local_idx).not_to    be_nil, "local measures dir should appear in measure_paths"
+        expect(gem_idx).not_to      be_nil, "gem measures dir should appear in measure_paths"
+        expect(external_idx).not_to be_nil, "external repo measures dir should appear in measure_paths"
 
-        expect(local_idx).to   be < gem_idx, 'local measures must come before gem measures'
-        expect(gem_idx).to     be < external_idx, 'gem measures must come before external repo measures'
+        expect(local_idx).to   be < gem_idx,      "local measures must come before gem measures"
+        expect(gem_idx).to     be < external_idx,  "gem measures must come before external repo measures"
       end
     end
 
     it 'omits external repo dir when no external repos are configured' do
       Dir.mktmpdir do |output_dir|
+
         allow(OpenStudio::Extension).to receive(:configure_osw) do |osw|
           osw[:measure_paths] = [gem_measure_dir]
         end
@@ -354,6 +356,7 @@ RSpec.describe BOSS::Boss do
 
     it 'does not duplicate paths that appear in both gem output and local dirs' do
       Dir.mktmpdir do |output_dir|
+
         # Extension reports the local dir again (can happen with some gem setups).
         allow(OpenStudio::Extension).to receive(:configure_osw) do |osw|
           osw[:measure_paths] = [LOCAL_MEASURES_DIR, gem_measure_dir]

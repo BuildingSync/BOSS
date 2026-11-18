@@ -46,7 +46,8 @@ RSpec.describe BOSS::HvacTopologySelector do
   premises = '<LinkedPremises><ThermalZone><LinkedThermalZoneID IDref="TZ-1"/></ThermalZone></LinkedPremises>'
 
   # One HVACSystem with a single HS/CS/Delivery triple plus optional plants and other systems.
-  system_xml = lambda do |delivery:, heating:, cooling:, zoning: nil, plants: all_plants, others: '', delivery_refs: nil, delivery_premises: premises, cooling_extra: ''|
+  system_xml = lambda do |delivery:, heating:, cooling:, zoning: nil, plants: all_plants, others: '', delivery_refs: nil,
+                          delivery_premises: premises, cooling_extra: ''|
     refs = delivery_refs || '<HeatingSourceID IDref="HS-1"/><CoolingSourceID IDref="CS-1"/>'
     zoning_xml = zoning ? "<ZoningSystemType>#{zoning}</ZoningSystemType>" : ''
     '<HeatingAndCoolingSystems>' \
@@ -97,7 +98,7 @@ RSpec.describe BOSS::HvacTopologySelector do
         expect(results.length).to eq(1)
         result = results.first
         expect(result.messages).to eq([])
-        expect(result).to have_attributes(status: :match, configuration:, measure:,
+        expect(result).to have_attributes(status: :match, configuration: configuration, measure: measure,
                                           hvac_system_id: 'HVAC-1', premises: [{ type: 'ThermalZone', id: 'TZ-1' }])
       end
     end
@@ -250,14 +251,15 @@ RSpec.describe BOSS::HvacTopologySelector do
   describe 'ventilation and other HVAC systems' do
     ventilation_delivery = "<Delivery ID=\"D-V\">#{premises}<DeliveryType>#{single_zone_cav}</DeliveryType>" \
                            '<HeatingSourceID IDref="HS-V"/><CoolingSourceID IDref="CS-V"/></Delivery>'
-    other = lambda do |type_xml, links: '<LinkedDeliveryIDs><LinkedDeliveryID IDref="D-V"/></LinkedDeliveryIDs>', integration: 'Stand-alone',|
+    other = lambda do |type_xml, links: '<LinkedDeliveryIDs><LinkedDeliveryID IDref="D-V"/></LinkedDeliveryIDs>',
+                       integration: 'Stand-alone'|
       "<OtherHVACSystems><OtherHVACSystem ID=\"O-1\"><OtherHVACType>#{type_xml}</OtherHVACType>" \
         "<Integration>#{integration}</Integration>#{links}</OtherHVACSystem></OtherHVACSystems>"
     end
     mechanical = ->(type) { "<MechanicalVentilation><VentilationType>#{type}</VentilationType></MechanicalVentilation>" }
 
     with_ventilation = lambda do |others, ventilation_heating: no_heating|
-      system_xml.call(**exact_cases['Packaged Terminal Air Conditioner'][1], others:)
+      system_xml.call(**exact_cases['Packaged Terminal Air Conditioner'][1], others: others)
                 .sub('</HeatingSources>', "<HeatingSource ID=\"HS-V\">#{ventilation_heating}</HeatingSource></HeatingSources>")
                 .sub('</CoolingSources>', "<CoolingSource ID=\"CS-V\">#{no_cooling}</CoolingSource></CoolingSources>")
                 .sub('</Deliveries>', "#{ventilation_delivery}</Deliveries>")
@@ -294,7 +296,7 @@ RSpec.describe BOSS::HvacTopologySelector do
 
     it 'reports a broken linked delivery as conflicting input' do
       links = '<LinkedDeliveryIDs><LinkedDeliveryID IDref="D-MISSING"/></LinkedDeliveryIDs>'
-      results = select_from(with_ventilation.call(other.call(mechanical.call('Supply only'), links:)))
+      results = select_from(with_ventilation.call(other.call(mechanical.call('Supply only'), links: links)))
       expect(results.last.status).to eq(:conflicting_input)
     end
 

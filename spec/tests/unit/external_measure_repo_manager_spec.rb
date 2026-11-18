@@ -18,7 +18,7 @@ RSpec.describe BOSS::ExternalMeasureRepoManager do
   end
 
   def manager_for(manifest_path, install_dir)
-    described_class.new(manifest_path:, install_dir:)
+    described_class.new(manifest_path: manifest_path, install_dir: install_dir)
   end
 
   # ---------------------------------------------------------------------------
