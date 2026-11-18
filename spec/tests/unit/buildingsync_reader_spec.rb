@@ -43,7 +43,7 @@ end
 
 RSpec.describe 'BuildingSyncReader' do
   describe 'get_climate_zone should' do
-    it 'get from site' do
+    it "get from site" do
       # Set Up
       doc = REXML::Document.new wrap_in_site(<<~XML)
         <ClimateZoneType>
@@ -67,11 +67,11 @@ RSpec.describe 'BuildingSyncReader' do
       ca_climate_zone = ca_buidingsync_reader.get_climate_zone
 
       # Assert
-      expect(ashrae_climate_zone).to eq 'ASHRAE 169-2013-3C'
-      expect(ca_climate_zone).to eq 'CEC T24-CEC3'
+      expect(ashrae_climate_zone).to eq "ASHRAE 169-2013-3C"
+      expect(ca_climate_zone).to eq "CEC T24-CEC3"
     end
 
-    it 'get from building' do
+    it "get from building" do
       # Set Up
       doc = REXML::Document.new wrap_in_site(<<~XML)
         <Buildings>
@@ -95,11 +95,11 @@ RSpec.describe 'BuildingSyncReader' do
       ca_climate_zone = ca_buidingsync_reader.get_climate_zone
 
       # Assert
-      expect(ashrae_climate_zone).to eq 'ASHRAE 169-2013-3C'
-      expect(ca_climate_zone).to eq 'CEC T24-CEC3'
+      expect(ashrae_climate_zone).to eq "ASHRAE 169-2013-3C"
+      expect(ca_climate_zone).to eq "CEC T24-CEC3"
     end
 
-    it 'return nil' do
+    it "return nil" do
       # Set Up
       doc = REXML::Document.new wrap_in_site(<<~XML)
         <Buildings>
@@ -121,7 +121,7 @@ RSpec.describe 'BuildingSyncReader' do
   end
 
   describe 'get_epw_file_path should' do
-    it 'expands an explicitly provided relative path' do
+    it "expands an explicitly provided relative path" do
       Dir.mktmpdir do |directory|
         Dir.chdir(directory) do
           relative_epw_path = 'weather.epw'
@@ -135,14 +135,14 @@ RSpec.describe 'BuildingSyncReader' do
       end
     end
 
-    it 'preserves an explicitly provided absolute path' do
+    it "preserves an explicitly provided absolute path" do
       epw_path = File.expand_path('weather/example.epw')
       reader = BOSS::BuildingSyncReader.new(REXML::Document.new(wrap_in_site('')), epw_path, ASHRAE90_1)
 
       expect(reader.get_epw_file_path).to eq epw_path
     end
 
-    it 'get from city sate' do
+    it "get from city sate" do
       # Set Up
       doc = REXML::Document.new wrap_in_site(<<~XML)
         <Buildings>
@@ -156,15 +156,15 @@ RSpec.describe 'BuildingSyncReader' do
       XML
 
       # Action
-      allow(BOSS::BCLWeatherFileDownloader).to receive(:download_weather_file_from_city_name).with('San Francisco', 'CA').and_return(openstudio_weather_file_path)
+      allow(BOSS::BCLWeatherFileDownloader).to receive(:download_weather_file_from_city_name).with("San Francisco", "CA").and_return(openstudio_weather_file_path)
       buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
       epw_file_path = buidingsync_reader.get_epw_file_path
 
       # Assert
-      expect(File.basename(epw_file_path)).to eq 'USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw'
+      expect(File.basename(epw_file_path)).to eq "USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw"
     end
 
-    it 'get from climate zone' do
+    it "get from climate zone" do
       # Set Up
       doc = REXML::Document.new wrap_in_site(<<~XML)
         <Buildings>
@@ -183,15 +183,15 @@ RSpec.describe 'BuildingSyncReader' do
       epw_file_path = buidingsync_reader.get_epw_file_path
 
       # Assert
-      expect(File.basename(epw_file_path)).to eq 'USA_CA_San.Deigo-Brown.Field.Muni.AP.722904_TMY3.epw'
+      expect(File.basename(epw_file_path)).to eq "USA_CA_San.Deigo-Brown.Field.Muni.AP.722904_TMY3.epw"
     end
 
-    it 'return nil' do
+    it "return nil" do
     end
   end
 
   describe 'get_city_state should' do
-    it 'get from building' do
+    it "get from building" do
       # Set Up
       doc = REXML::Document.new wrap_in_site(<<~XML)
         <Buildings>
@@ -209,10 +209,10 @@ RSpec.describe 'BuildingSyncReader' do
       city, state = buidingsync_reader.get_city_state
 
       # Assert
-      expect([city, state]).to eq ['San Francisco', 'CA']
+      expect([city, state]).to eq ["San Francisco", "CA"]
     end
 
-    it 'get from site' do
+    it "get from site" do
       # Set Up
       doc = REXML::Document.new wrap_in_site(<<~XML)
         <Address>
@@ -230,10 +230,10 @@ RSpec.describe 'BuildingSyncReader' do
       city, state = buidingsync_reader.get_city_state
 
       # Assert
-      expect([city, state]).to eq ['San Francisco', 'CA']
+      expect([city, state]).to eq ["San Francisco", "CA"]
     end
 
-    it 'return nil' do
+    it "return nil" do
       # Set Up
       doc = REXML::Document.new wrap_in_site(<<~XML)
         <Buildings>
@@ -277,28 +277,28 @@ RSpec.describe 'BuildingSyncReader' do
       XML
     end
 
-    it 'prefer building over site when both have floor area' do
+    it "prefer building over site when both have floor area" do
       doc = REXML::Document.new site_with_building(floor_areas(20000), floor_areas(15000))
       buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
 
       expect(buidingsync_reader.get_total_floor_area).to eq 15000
     end
 
-    it 'get from building' do
+    it "get from building" do
       doc = REXML::Document.new site_with_building('', floor_areas(15000))
       buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
 
       expect(buidingsync_reader.get_total_floor_area).to eq 15000
     end
 
-    it 'fall back to site when building has no floor area' do
+    it "fall back to site when building has no floor area" do
       doc = REXML::Document.new site_with_building(floor_areas(20000), '')
       buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
 
       expect(buidingsync_reader.get_total_floor_area).to eq 20000
     end
 
-    it 'get from site when building is missing' do
+    it "get from site when building is missing" do
       doc = REXML::Document.new wrap_in_site(floor_areas(20000))
       buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
 
@@ -368,7 +368,7 @@ RSpec.describe 'BuildingSyncReader' do
       XML
     end
 
-    it 'sum InstalledPower' do
+    it "sum InstalledPower" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <LightingSystems>
@@ -388,7 +388,7 @@ RSpec.describe 'BuildingSyncReader' do
       expect(buidingsync_reader.get_total_installed_power).to eq 5
     end
 
-    it 'return nil if any LightingSystem has nil InstalledPower' do
+    it "return nil if any LightingSystem has nil InstalledPower" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <LightingSystems>
@@ -410,7 +410,7 @@ RSpec.describe 'BuildingSyncReader' do
       expect(buidingsync_reader.get_total_installed_power).to eq nil
     end
 
-    it 'return nil if no LightingSystems' do
+    it "return nil if no LightingSystems" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems('')
 
@@ -421,7 +421,7 @@ RSpec.describe 'BuildingSyncReader' do
       expect(buidingsync_reader.get_total_installed_power).to eq nil
     end
 
-    it 'return nil if no InstalledPower' do
+    it "return nil if no InstalledPower" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <LightingSystems>
@@ -441,7 +441,7 @@ RSpec.describe 'BuildingSyncReader' do
   end
 
   describe 'get_total_weighted_average_load should' do
-    it 'sum weighted average load' do
+    it "sum weighted average load" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <PlugLoads>
@@ -461,7 +461,7 @@ RSpec.describe 'BuildingSyncReader' do
       expect(buidingsync_reader.get_total_weighted_average_load).to eq 5
     end
 
-    it 'return nil if any plugload has nil WeightedAverageLoad' do
+    it "return nil if any plugload has nil WeightedAverageLoad" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <PlugLoads>
@@ -483,7 +483,7 @@ RSpec.describe 'BuildingSyncReader' do
       expect(buidingsync_reader.get_total_weighted_average_load).to eq nil
     end
 
-    it 'return nil if no plug loads' do
+    it "return nil if no plug loads" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems('')
 
@@ -494,7 +494,7 @@ RSpec.describe 'BuildingSyncReader' do
       expect(buidingsync_reader.get_total_weighted_average_load).to eq nil
     end
 
-    it 'return nil if no WeightedAverageLoad' do
+    it "return nil if no WeightedAverageLoad" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <PlugLoads>
@@ -514,47 +514,47 @@ RSpec.describe 'BuildingSyncReader' do
   end
 
   describe 'get_window_data should' do
-    good_window = <<~XML
-      <FenestrationSystem ID='1' xmlns:auc=\"http://buildingsync.net/schemas/bedes-auc/2019\">
-        <FenestrationType>
-          <Window/>
-        </FenestrationType>
-        <FenestrationFrameMaterial>Aluminum no thermal break</FenestrationFrameMaterial>
-        <FenestrationOperation>false</FenestrationOperation>
-        <TightnessFitCondition>Average</TightnessFitCondition>
-        <GlassType>Clear uncoated</GlassType>
-        <FenestrationGlassLayers>Single pane</FenestrationGlassLayers>
-        <SolarHeatGainCoefficient>0.391000</SolarHeatGainCoefficient>
-        <VisibleTransmittance>0.391000</VisibleTransmittance>
-        <FenestrationUFactor>3.241000</FenestrationUFactor>
-      </FenestrationSystem>
-    XML
-    invalid_window = <<~XML
-      <FenestrationSystem ID='2' xmlns:auc=\"http://buildingsync.net/schemas/bedes-auc/2019\">
-        <FenestrationType>
-          <Window/>
-        </FenestrationType>
-        <FenestrationFrameMaterial>Fiberglass</FenestrationFrameMaterial>
-        <FenestrationOperation>false</FenestrationOperation>
-        <TightnessFitCondition>Average</TightnessFitCondition>
-        <GlassType>Clear uncoated</GlassType>
-        <FenestrationGlassLayers>Single pane</FenestrationGlassLayers>
-        <SolarHeatGainCoefficient>0.391000</SolarHeatGainCoefficient>
-        <VisibleTransmittance>0.391000</VisibleTransmittance>
-        <FenestrationUFactor>3.241000</FenestrationUFactor>
-      </FenestrationSystem>
-    XML
-    door = <<~XML
-      <FenestrationSystem ID=\"FenestrationSystemType-45021100\">
-        <FenestrationType>
-          <Door>
-            <ExteriorDoorType>Uninsulated metal</ExteriorDoorType>
-          </Door>
-        </FenestrationType>
-      </FenestrationSystem>
-    XML
+      good_window = <<~XML
+        <FenestrationSystem ID='1' xmlns:auc=\"http://buildingsync.net/schemas/bedes-auc/2019\">
+          <FenestrationType>
+            <Window/>
+          </FenestrationType>
+          <FenestrationFrameMaterial>Aluminum no thermal break</FenestrationFrameMaterial>
+          <FenestrationOperation>false</FenestrationOperation>
+          <TightnessFitCondition>Average</TightnessFitCondition>
+          <GlassType>Clear uncoated</GlassType>
+          <FenestrationGlassLayers>Single pane</FenestrationGlassLayers>
+          <SolarHeatGainCoefficient>0.391000</SolarHeatGainCoefficient>
+          <VisibleTransmittance>0.391000</VisibleTransmittance>
+          <FenestrationUFactor>3.241000</FenestrationUFactor>
+        </FenestrationSystem>
+      XML
+      invalid_window = <<~XML
+        <FenestrationSystem ID='2' xmlns:auc=\"http://buildingsync.net/schemas/bedes-auc/2019\">
+          <FenestrationType>
+            <Window/>
+          </FenestrationType>
+          <FenestrationFrameMaterial>Fiberglass</FenestrationFrameMaterial>
+          <FenestrationOperation>false</FenestrationOperation>
+          <TightnessFitCondition>Average</TightnessFitCondition>
+          <GlassType>Clear uncoated</GlassType>
+          <FenestrationGlassLayers>Single pane</FenestrationGlassLayers>
+          <SolarHeatGainCoefficient>0.391000</SolarHeatGainCoefficient>
+          <VisibleTransmittance>0.391000</VisibleTransmittance>
+          <FenestrationUFactor>3.241000</FenestrationUFactor>
+        </FenestrationSystem>
+      XML
+      door = <<~XML
+        <FenestrationSystem ID=\"FenestrationSystemType-45021100\">
+          <FenestrationType>
+            <Door>
+              <ExteriorDoorType>Uninsulated metal</ExteriorDoorType>
+            </Door>
+          </FenestrationType>
+        </FenestrationSystem>
+      XML
 
-    it 'work in happy case' do
+    it "work in happy case" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <FenestrationSystems>
@@ -567,13 +567,13 @@ RSpec.describe 'BuildingSyncReader' do
       window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance = buidingsync_reader.get_window_data
 
       # Assertion
-      expect(window_pane_type).to eq 'Single - No LowE - Clear - Aluminum'
-      expect(fenestration_u_factor).to eq '3.241000'
-      expect(solar_heat_gain_coefficient).to eq '0.391000'
-      expect(visible_transmittance).to eq '0.391000'
+      expect(window_pane_type).to eq "Single - No LowE - Clear - Aluminum"
+      expect(fenestration_u_factor).to eq "3.241000"
+      expect(solar_heat_gain_coefficient).to eq "0.391000"
+      expect(visible_transmittance).to eq "0.391000"
     end
 
-    it 'ignore doors and skylights' do
+    it "ignore doors and skylights" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <FenestrationSystems>
@@ -587,13 +587,13 @@ RSpec.describe 'BuildingSyncReader' do
       window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance = buidingsync_reader.get_window_data
 
       # Assertion
-      expect(window_pane_type).to eq 'Single - No LowE - Clear - Aluminum'
-      expect(fenestration_u_factor).to eq '3.241000'
-      expect(solar_heat_gain_coefficient).to eq '0.391000'
-      expect(visible_transmittance).to eq '0.391000'
+      expect(window_pane_type).to eq "Single - No LowE - Clear - Aluminum"
+      expect(fenestration_u_factor).to eq "3.241000"
+      expect(solar_heat_gain_coefficient).to eq "0.391000"
+      expect(visible_transmittance).to eq "0.391000"
     end
 
-    it 'work if first window is invalid but second isnt' do
+    it "work if first window is invalid but second isnt" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <FenestrationSystems>
@@ -607,15 +607,15 @@ RSpec.describe 'BuildingSyncReader' do
       window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance = buidingsync_reader.get_window_data
 
       # Assertion
-      expect(window_pane_type).to eq 'Single - No LowE - Clear - Aluminum'
-      expect(fenestration_u_factor).to eq '3.241000'
-      expect(solar_heat_gain_coefficient).to eq '0.391000'
-      expect(visible_transmittance).to eq '0.391000'
+      expect(window_pane_type).to eq "Single - No LowE - Clear - Aluminum"
+      expect(fenestration_u_factor).to eq "3.241000"
+      expect(solar_heat_gain_coefficient).to eq "0.391000"
+      expect(visible_transmittance).to eq "0.391000"
     end
 
-    it 'return nil if there are no windows' do
+    it "return nil if there are no windows" do
       # Set Up
-      doc = REXML::Document.new wrap_in_systems('')
+      doc = REXML::Document.new wrap_in_systems("")
 
       # Action
       buidingsync_reader = BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
@@ -626,7 +626,7 @@ RSpec.describe 'BuildingSyncReader' do
     end
 
     # warn not error
-    it 'return nil if all windows are invalid' do
+    it "return nil if all windows are invalid" do
       # Set Up
       doc = REXML::Document.new wrap_in_systems(<<~XML)
         <FenestrationSystems>

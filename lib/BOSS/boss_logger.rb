@@ -8,14 +8,14 @@ require 'logger'
 
 module BOSS
   # module BOSSLogger
-  @@BOSS_logger = Logger.new($stdout)
+    @@BOSS_logger = Logger.new($stdout)
 
-  # Set Logger::DEBUG for development
-  @@BOSS_logger.level = Logger::DEBUG
-  ##
-  # Defining class variable "@@logger" to log errors, info and warning messages.
-  def self.BOSS_logger
-    @@BOSS_logger
-  end
+    # Set Logger::DEBUG for development
+    @@BOSS_logger.level = Logger::DEBUG
+    ##
+    # Defining class variable "@@logger" to log errors, info and warning messages.
+    def self.BOSS_logger
+      @@BOSS_logger
+    end
   # end
 end
