@@ -84,7 +84,7 @@ The table below maps in detail the BuildingSync XML data to measure inputs. Note
 |                                        | climate_zone            | get_climate_zone                          | either `.../Site/ClimateZoneType/ASHRAE/ClimateZone` or `.../Site/ClimateZoneType/CaliforniaTitle24/ClimateZone` depending on standard |
 | [create_bar_from_building_type_ratios] |                         |                                           |                                                                                                                                   |
 |                                        | bldg_type_a             | get_building_type_and_bar_division_method | `.../Building/OccupancyClassification` + requirements for `get_total_floor_area` (+ requirements for `get_floor_above_grade` lest defaulted to 1 + requirements for `get_floor_below_grade` lest defaulted to 0)   |
-|                                        | total_bldg_floor_area   | get_total_floor_area                      | at least one entry of `/FloorArea` in either `.../Site/FloorAreas/` or `.../Building/FloorAreas/`, with `FloorAreaType` of "Gross", "Conditioned", "Common", "Heated and Cooled", "Heated Only", "Cooled Only", "Conditioned above grade", or "Conditioned below grade"                                                    |
+|                                        | total_bldg_floor_area   | get_total_floor_area                      | at least one entry of `/FloorArea` in either `.../Building/FloorAreas/` or `.../Site/FloorAreas/` (Building is used when both have one), with `FloorAreaType` of "Gross", "Conditioned", "Common", "Heated and Cooled", "Heated Only", "Cooled Only", "Conditioned above grade", or "Conditioned below grade"                                                    |
 |                                        | floor_height            | get_floor_to_floor_height                 | at least on entry of `.../Building/Sections/Section` with entry `/FloorToFloorHeight`                           |
 |                                        | num_stories_above_grade | get_floor_above_grade                     | either `.../Building/FloorsAboveGrade` or `.../Building/ConditionedFloorsAboveGrade` and `.../Building/UnconditionedFloorsAboveGrade`                                |
 |                                        | num_stories_below_grade | get_floor_below_grade                     | either `.../Building/FloorsBelowGrade` or `.../Building/ConditionedFloorsBelowGrade` and `.../Building/UnconditionedFloorsBelowGrade`                                 |
@@ -175,8 +175,34 @@ bundle exec boss write_baseline_osw "spec/files/v2.7.0/L100_Audit-1.0.0.xml" -o 
 
 ## Tests
 
-To run the tests you can use the Rake task:
+Integration tests need the external measures installed first:
+
+```bash
+bundle exec rake measures:install_external
+```
+
+Run the full suite (unit + all integration simulations):
 
 ```bash
 bundle exec rake
 ```
+
+Run only the fast unit tests:
+
+```bash
+bundle exec rspec spec/tests/unit
+```
+
+Run the integration smoke subset (2 simulations):
+
+```bash
+BOSS_SMOKE=1 bundle exec rspec spec/tests/integration
+```
+
+Run one shard of the full integration suite (here shard 0 of 4, as in CI):
+
+```bash
+BOSS_SHARD=0 BOSS_SHARDS=4 bundle exec rspec spec/tests/integration
+```
+
+In CI, unit tests run on every pull request. The full integration suite (4 parallel shards) also runs on every pull request, except documentation-only changes (`*.md`, `docs/`, `LICENSE`) or pull requests labeled `skip-integration`. It always runs on pushes to `develop`, tags, nightly, and on manual dispatch.
