@@ -34,6 +34,19 @@ test_configs = [
   ['Reference-PrimarySchool-L100-Audit.xml', ASHRAE90_1, nil, 'v2.7.0'],
 ]
 
+# BOSS_SMOKE=1 runs a small representative subset (used on pull requests).
+SMOKE_FILES = ['building_151.xml', 'example-smalloffice-level1.xml'].freeze
+test_configs = test_configs.select { |config| SMOKE_FILES.include?(config[0]) } if ENV['BOSS_SMOKE'] == '1'
+
+# BOSS_SHARD / BOSS_SHARDS split the fixtures across parallel CI jobs.
+if ENV['BOSS_SHARDS']
+  shards = Integer(ENV['BOSS_SHARDS'])
+  shard = Integer(ENV.fetch('BOSS_SHARD', '0'))
+  raise ArgumentError, "BOSS_SHARD must be in 0...#{shards}" if shards < 1 || shard.negative? || shard >= shards
+
+  test_configs = test_configs.select.with_index { |_config, index| index % shards == shard }
+end
+
 RSpec.describe 'BOSS' do
   describe 'boss should' do
     before do
