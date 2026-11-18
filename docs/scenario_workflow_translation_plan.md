@@ -328,12 +328,19 @@ Use this roadmap as the tracker. Keep `Status` and `Delivered by` current when a
 
 ### PR 14E: Scenario HVAC Mappings
 
-- Status: Planned
+- Status: In progress (series close pending)
 - Delivered by: -
 - Depends on: PR 14D.
 - Scope: Map HVAC retrofit measures onto the steps `HvacTargetBinder` already produces (`bind` for topology `replace`, `bind_modifier` for `modify_existing_*`) through the PR 9 result contract. No new binding work belongs here. Order conditioning, then DOAS/ventilation, then modifiers. Keep existing economizer, DCV, and thermostat mappings from other gems.
 - Done when: One topology replacement and one modifier case run end to end, partial shared-system replacement is rejected, and mixed-source packages still write and run.
 - Avoid: Mapping "Replace boiler" or "Replace burner" to an efficiency edit, guessing values, or partial HVAC graphs.
+- Decision: `BOSS::ScenarioHvacPlanner` (`lib/BOSS/scenario_hvac_planner.rb`) runs before the JSON map in `ScenarioMeasureMapper.map_measure`. It returns `:mapped` (its steps replace the JSON lookup), `:unmapped` (`hvac_measure_unmapped` warning; the scenario is skipped), or `:not_hvac` (fall through to the JSON map). It tries, in order:
+  - Replacement: the measure's `TechnologyCategories` reference `ExistingSystemReplaced` and `AlternativeSystemReplacement` HVACSystem IDrefs. `BaselineHvacPlanner#plan` reruns on the alternative systems with `operation: 'replace'` for conditioning (ventilation stays `create`). Every baseline HVACSystem must be in `ExistingSystemReplaced`; otherwise the measure is unmapped as a partial replacement.
+  - Modification: `ExistingSystemAffected` plus a `ModifiedSystem` HVACSystem. Efficiencies come from the modified system and bind through `bind_modifier` into the new `hvac_modifiers` phase (after `hvac_equipment`). DX cooling COP, heat pump heating COP, furnace `Thermal Efficiency`, and electric resistance map; other units (EER, SEER, AFUE, HSPF, kW/ton) are unmapped with no unit conversion.
+  - Named topology: with no IDrefs, only `Install variable refrigerant flow system` maps (VRF replace on the measure's premises, then sizing). This deviates from the 14B MeasureName rule with user approval; GSHP stays a mapping gap.
+- Decision: proposed systems (`AlternativeSystemReplacement`/`ModifiedSystem` IDrefs) are excluded from baseline HVAC planning. `write_baseline_and_scenario_osws` accepts `hvac_retrofit_template:` (one of `HvacTargetBinder::STANDARDS_TEMPLATES`), defaulting to the baseline template.
+- Fixture: `spec/files/v2.7.0/example-smalloffice-level2-hvac-retrofits.xml` adds proposed RTU and COP systems and scenarios `Scenario-POM-HVAC-RTU` (replacement), `-COP` (modifier), `-VRF` (named), and `-mixed` (COP modifier plus LEDs). `write_and_run_osws_spec.rb` writes and runs them.
+- Limitations: a modifier and a replacement in the same package can target equipment the replacement removed, and `apply_hvac_modifier_to_object_scope` fails when nothing matches; such packages are not guarded yet. The named VRF replacement adds no DOAS.
 - Series close: merge the `buildingsync-measures-gem` branch upstream (`apply_hvac_topology_to_zone_scope`, `apply_standard_hvac_sizing_and_efficiency`, and any 14E measures), replace the CI branch-commit pin with the merged commit, and rerun the unit and integration suites.
 
 ### PR 15: CLI Command

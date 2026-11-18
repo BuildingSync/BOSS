@@ -85,7 +85,7 @@ RSpec.describe 'scenario_measure_map.json' do
 
   it 'assigns each step a declared workflow phase' do
     expect(scenario_measure_map.fetch('workflow_phases')).to eq [
-      'envelope', 'internal_loads', 'hvac_equipment', 'controls_operations'
+      'envelope', 'internal_loads', 'hvac_equipment', 'hvac_modifiers', 'controls_operations'
     ]
 
     phases = mappings.to_h do |mapping|
