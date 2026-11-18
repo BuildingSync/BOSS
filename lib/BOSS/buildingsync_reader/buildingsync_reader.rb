@@ -478,6 +478,37 @@ module BOSS
           return window_pane_type, fenestration_u_factor, solar_heat_gain_coefficient, visible_transmittance
         end
       end
+
+    def _get_systems(system_name, system_path)
+      BOSS.BOSS_logger.info("|\t|\t|\t- finding all #{system_name} systems...")
+      systems = @facility_xml.elements.each("#{@ns}Systems/#{system_path}") {|s| s}
+      if systems.nil? || systems.length == 0
+        BOSS.BOSS_logger.info("|\t|\t|\t  no #{system_name} systems found")
+      end
+        BOSS.BOSS_logger.info("|\t|\t|\t  #{systems.length} #{system_name} systems found")
+
+      return systems
+    end
+
+
+    def get_air_infiltration_value
+      air_infiltration_system = _get_systems(
+        system_name="Air Infiltration",
+        system_path="#{@ns}AirInfiltrationSystems/#{@ns}AirInfiltrationSystem"
+      ).first
+
+      return nil, nil if air_infiltration_system.nil?
+
+      units = air_infiltration_system.elements["#{@ns}AirInfiltrationValueUnits"]&.text
+      value = air_infiltration_system.elements["#{@ns}AirInfiltrationValue"]&.text
+
+      return "ACH50", value if units == "ACH50"
+      return "ACH_natural", value if units == "ACHnatural"
+
+      BOSS.BOSS_logger.info("|\t|\t|\t  units is '#{units}', which does not translate.")
+      return nil, nil
+    end
+
     return nil
   end
 end
