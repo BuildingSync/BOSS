@@ -1,0 +1,9 @@
+flowchart LR
+  A(["Boss.write_baseline_osw<br/><b>start the baseline OSW build</b>"]) --> B["1. Reader<br/>get_hvac_systems_xml<br/><b>read HVACSystems from BuildingSync</b>"]
+  B --> C["2. HvacTopologySelector<br/>one status per Delivery / OtherHVACSystem<br/><b>classify each HVAC record; match it to a measure</b>"]
+  C --> D["3. BaselineHvacPlanner<br/>skip proposed systems; all must match;<br/>one conditioning + optional ventilation<br/><b>decide L200 topology or L100 fallback</b>"]
+  D -- topology --> E["4. HvacTargetBinder<br/>whole-building premises → all model zones<br/><b>apply each measure to all model zones</b>"]
+  E --> F["5a. L200 OSW: add_hvac = false<br/>+ conditioning, ventilation, sizing steps<br/><b>build the audited HVAC system</b>"]
+  D -- "fallback to L100" --> G["5b. L100 OSW (generic HVAC workflow):<br/>add_hvac = true<br/>+ one warning per reason<br/><b>fall back to L100 generic HVAC, log why</b>"]
+  F --> H["6. Write in.osw and run OpenStudio<br/><b>simulate the baseline</b>"]
+  G --> H

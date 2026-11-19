@@ -1,0 +1,85 @@
+flowchart TD
+  START(["Boss.write_baseline_osw(xml, output, epw, standard)"]) --> BUILD["build_baseline_osw (private)"]
+  BUILD --> READ["BuildingSyncReader.get_hvac_systems_xml<br/>returns Facility/Systems/HVACSystems"]
+  READ --> NOSYS{"Planner: HVACSystems present?"}
+  NOSYS -- no --> FB
+  NOSYS -- yes --> TPL{"Template supported?<br/>DOE Ref Pre-1980, DOE Ref 1980-2004,<br/>90.1-2004 … 90.1-2019"}
+  TPL -- no --> FB
+  TPL -- yes --> SYS
+
+  subgraph SELECTOR["HvacTopologySelector.select: one status per Delivery and per OtherHVACSystem"]
+    SYS{"HVACSystem has Delivery or<br/>OtherHVACSystem records?"}
+    SYS -- "no (only Principal/PrimaryHVACSystemType)" --> MISS["status: missing_input"]
+    SYS -- yes --> DUP{"IDs unique?"}
+    DUP -- no --> R_CONF["status: conflicting_input"]
+    DUP -- yes --> SPLIT["Deliveries owned by a ventilation record are<br/>judged with that record, not as conditioning"]
+    SPLIT --> SEL["Each remaining Delivery: follow HeatingSourceID / CoolingSourceID<br/>→ sources → Heating / Cooling / Condenser plants"]
+    SEL --> REFOK{"References resolve; source IDs<br/>and premises present?"}
+    REFOK -- "broken / conflicting" --> R_CONF
+    REFOK -- "field missing" --> MISS
+    REFOK -- yes --> RULES{"DELIVERY_RULES + NOT_MAPPABLE_DELIVERY"}
+    RULES -- "one supported rule" --> GUARD{"Must-be-absent elements absent<br/>and guards pass?"}
+    GUARD -- no --> R_CONF
+    GUARD -- yes --> MATCH["status: match + measure:<br/>PTAC→hvac_ptac · PTHP→hvac_pthp<br/>RTU AC→hvac_packaged_rooftop_ac<br/>RTU HP→hvac_packaged_rooftop_heat_pump<br/>(supplemental_heating_fuel from HeatPumpBackupSystemFuel)<br/>Pkg VAV HW reheat · VAV HW reheat<br/>Warm air furnace · VRF · 4-pipe FCU"]
+    RULES -- "gap rule" --> GAP["status: mapping_gap<br/>VAV electric reheat, WLHP, GSHP,<br/>chilled beam, radiant"]
+    RULES -- "one not-mappable hit" --> NM["status: not_mappable<br/>split DX, split/mini/multi-split HP, SPVAC/SPVHP,<br/>field-assembled DX, 2-pipe fan coil, baseboard/radiator,<br/>heating-only or cooling-only pair, multizone CAV / CAV reheat,<br/>VAV no reheat, unsupported VAV reheat, UFAD, evaporative,<br/>steam/district/solar heat, absorption/district cooling,<br/>air-cooled chiller"]
+    RULES -- "more than one hit" --> R_CONF
+    RULES -- "no hit" --> MISS
+    SPLIT --> OTH["Each OtherHVACSystem"]
+    OTH --> EQ{"Spot exhaust, humidifier, dehumidifier,<br/>air cleaner, natural ventilation?"}
+    EQ -- yes --> NM
+    EQ -- no --> VENT{"VentilationType"}
+    VENT -- "missing" --> MISS
+    VENT -- "more than one" --> R_CONF
+    VENT -- "HRV / ERV / Exhaust only" --> NM
+    VENT -- "integrated with air distribution" --> INTEG["status: integrated<br/>(linked deliveries judged as conditioning)"]
+    VENT -- "None" --> ANNOT["status: no_hvac<br/>(explicitly no HVAC, or no separate<br/>ventilation equipment)"]
+    VENT -- "Supply only / DOAS" --> VCHK{"Links resolve and not shared?<br/>Deliveries unconditioned?<br/>Stand-alone, single-duct CAV?<br/>Guards pass?"}
+    VCHK -- "broken / shared link, guard fails" --> R_CONF
+    VCHK -- "deliveries heated or cooled" --> NM
+    VCHK -- "requirements not met" --> MISS
+    VCHK -- yes --> VMATCH["match: Supply only → hvac_ventilation_only<br/>DOAS → hvac_doas"]
+    MATCH --> PREM["Attach premises: record LinkedPremises,<br/>else inherit HVACSystem LinkedPremises"]
+    VMATCH --> PREM
+  end
+
+  PREM --> PROP
+  R_CONF --> PROP
+  GAP --> PROP
+  NM --> PROP
+  MISS --> PROP
+  INTEG --> PROP
+  ANNOT --> PROP
+
+  subgraph PLANNER["BaselineHvacPlanner.plan"]
+    PROP["Drop results of proposed systems<br/>(exclude_system_ids from a Measure's<br/>AlternativeSystemReplacement / ModifiedSystem)"]
+    PROP --> ANY{"Any results left?"}
+    ANY -- yes --> PLAN{"Every result is match?<br/>(any other status falls back,<br/>including integrated and no_hvac)"}
+    PLAN -- yes --> GROUP["Group by (measure, measure_arguments);<br/>merge premises; split into<br/>conditioning and ventilation"]
+    GROUP --> CFG{"Configuration checks (all reasons reported together):<br/>exactly 1 conditioning; at most 1 ventilation;<br/>if ventilation, conditioning is zone equipment<br/>(ptac, pthp, four_pipe_fan_coil, vrf)"}
+    CFG -- pass --> NORM["normalize_premises: Section links covering the building<br/>(Whole building section, or all non-empty sections)<br/>→ treated as Building"]
+  end
+
+  ANY -- no --> FB
+  PLAN -- no --> FB
+  CFG -- "any fails" --> FB
+
+  subgraph BINDER["HvacTargetBinder.bind (conditioning: given operation; ventilation: always create)"]
+    NORM --> WB{"Premises all Building / Site / Facility?<br/>(generated geometry has no BuildingSync zone IDs)"}
+    WB -- yes --> STEP["apply_hvac_topology_to_zone_scope step:<br/>topology_measure, operation create/replace,<br/>zone_scope = all_model_zones, standards_template,<br/>topology_arguments_json (only if measure arguments)"]
+  end
+  WB -- "no (zone/space premise)<br/>missing_input" --> FB
+
+  STEP --> SIZE["Steps: conditioning → ventilation →<br/>apply_standard_hvac_sizing_and_efficiency(template)"]
+  SIZE --> TOPO["Plan = :topology"]
+
+  TOPO --> OSW1["OSWArgPopulator:<br/>create_typical_building_from_model add_hvac = false<br/>append_step + set_step_argument (per step, no name collision)"]
+  OSW1 --> DIRS1["measure_paths include scenario_only repos<br/>(buildingsync-measures-gem via local_path ../../buildingsync-measures-gem)"]
+
+  FB["Plan = :fallback with reasons"] --> OSW2["create_typical_building_from_model add_hvac = true<br/>log warning per reason:<br/>'Keeping create_typical_building_from_model HVAC: …'"]
+  OSW2 --> DIRS2["measure_paths exclude scenario_only repos<br/>(sibling gem checkout not required)"]
+
+  DIRS1 --> WRITE["Write baseline/in.osw"]
+  DIRS2 --> WRITE
+  WRITE --> RUN["Boss.run_baseline_osw → OpenStudio workflow"]
+  RUN --> CHECK["Integration check (shard 0, non-smoke):<br/>Success, add_hvac=false, PSZ-HP loops w/ NaturalGas<br/>supplemental heat for template, sizing Success"]
