@@ -309,7 +309,7 @@ RSpec.describe BOSS::HvacTopologySelector do
           [[:match, 'hvac_packaged_rooftop_heat_pump'], [:match, 'upgrade_hvac_exhaust_air_energy_or_heat_recovery']]
         )
         expect(results.last).to have_attributes(record_ids: ['O-1', 'D-1'], group_key: [:recovery, 'O-1'],
-                                                measure_arguments: {})
+                                                measure_arguments: { 'ventilation_type' => type })
       end
     end
 

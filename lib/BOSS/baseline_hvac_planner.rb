@@ -24,6 +24,9 @@ module BOSS
     VENTILATION_MEASURES = HvacTopologySelector::VENTILATION_MEASURES.values.map(&:last).freeze
     ZONE_EQUIPMENT_MEASURES = ['hvac_ptac', 'hvac_pthp', 'hvac_four_pipe_fan_coil', 'hvac_vrf'].freeze
     RECOVERY_MEASURE = HvacTopologySelector::RECOVERY_MEASURE
+    ERV_TYPE = 'Energy recovery ventilator'
+    ERV_STEP = { measure_dir_name: 'modify_existing_heat_recovery',
+                 arguments: { target_heat_exchanger_names: '*', effectiveness_metric: 'comstock_erv' } }.freeze
     RECOVERY_HOST_MEASURES = ['hvac_packaged_rooftop_ac', 'hvac_packaged_rooftop_heat_pump', 'hvac_warm_air_furnace',
                               'hvac_packaged_rooftop_vav_hw_reheat', 'hvac_vav_hw_reheat'].freeze
 
@@ -84,6 +87,8 @@ module BOSS
       sizing_step = { measure_dir_name: SIZING_MEASURE, arguments: { standards_template: } }
       steps = bindings.map { |_, binding| binding.step } + [sizing_step]
       steps << { measure_dir_name: RECOVERY_MEASURE, arguments: {} } if !recovery.empty?
+      # ComStock picks HRV or ERV by climate zone; an audited ERV gets ComStock's ERV values.
+      steps << ERV_STEP if recovery.any? { |r| r.measure_arguments['ventilation_type'] == ERV_TYPE }
       Plan.new(status: :topology, steps:, messages: [])
     end
 
@@ -144,6 +149,9 @@ module BOSS
 
       problems = []
       problems << 'Recovery ventilation cannot be combined with separate ventilation equipment.' if !ventilation.empty?
+      if recovery.map { |r| r.measure_arguments['ventilation_type'] }.uniq.length > 1
+        problems << 'Mixed heat and energy recovery ventilators are not supported; ComStock recovery is model-wide.'
+      end
       if !RECOVERY_HOST_MEASURES.include?(host.measure)
         problems << "Recovery ventilation is not supported with #{host.configuration}."
       end

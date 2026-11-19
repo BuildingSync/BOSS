@@ -638,8 +638,11 @@ module BOSS
       failures << 'Guard failed: O/PrimaryFuel' unless x_probe.guard(other, 'PrimaryFuel', ELECTRIC)
       return _result(:conflicting_input, sys_id, ids, premises, nil, failures, configuration: RECOVERY_CONFIGURATION) unless failures.empty?
 
+      # ComStock takes no arguments; ventilation_type tells the planner whether to override
+      # ComStock's climate-zone HRV/ERV choice.
       _result(:match, sys_id, ids, premises, [:recovery, other.attributes['ID']], messages,
-              configuration: RECOVERY_CONFIGURATION, measure: RECOVERY_MEASURE)
+              configuration: RECOVERY_CONFIGURATION, measure: RECOVERY_MEASURE,
+              measure_arguments: { 'ventilation_type' => (Context.texts(mv, 'VentilationType') & RECOVERY_TYPES).first })
     end
 
     def _explicit_no_hvac?(x)

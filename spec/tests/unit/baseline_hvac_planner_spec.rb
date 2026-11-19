@@ -135,9 +135,10 @@ RSpec.describe BOSS::BaselineHvacPlanner do
       result.call(measure: 'hvac_packaged_rooftop_heat_pump', configuration: 'RTU HP', group_key: [:delivery, id],
                   record_ids: [id, 'HS-1', 'CS-1'])
     end
-    recovery = lambda do |links = ['D-1'], id: 'O-1', premises: building|
+    recovery = lambda do |links = ['D-1'], id: 'O-1', premises: building, type: 'Heat recovery ventilator'|
       result.call(measure: 'upgrade_hvac_exhaust_air_energy_or_heat_recovery', configuration: 'Recovery',
                   group_key: [:recovery, id], record_ids: [id] + links, premises:)
+            .tap { |r| r.measure_arguments = { 'ventilation_type' => type } }
     end
 
     it 'appends one ComStock recovery step after sizing' do
@@ -151,13 +152,27 @@ RSpec.describe BOSS::BaselineHvacPlanner do
       expect(plan.steps.last[:arguments]).to eq({})
     end
 
+    it 'sets ComStock ERV effectiveness after recovery for an energy recovery ventilator' do
+      plan = plan_for([rtu.call, recovery.call(type: 'Energy recovery ventilator')], hvac_systems)
+
+      expect(plan.status).to eq(:topology), plan.messages.join("\n")
+      expect(plan.steps.last(2)).to eq(
+        [{ measure_dir_name: 'upgrade_hvac_exhaust_air_energy_or_heat_recovery', arguments: {} },
+         { measure_dir_name: 'modify_existing_heat_recovery',
+           arguments: { target_heat_exchanger_names: '*', effectiveness_metric: 'comstock_erv' } }]
+      )
+    end
+
     {
       'partial delivery coverage' => [-> { [rtu.call, rtu.call('D-2'), recovery.call] }, /does not serve deliveries D-2/],
       'zone equipment hosts' => [-> { [result.call(record_ids: ['D-1']), recovery.call] }, /not supported with PTAC/],
       'non-building scope' => [-> { [rtu.call, recovery.call(premises: [{ type: 'ThermalZone', id: 'TZ-1' }])] },
                                /must both serve the whole building/],
       'separate ventilation' => [-> { [rtu.call, recovery.call, result.call(measure: 'hvac_doas', group_key: [:other, 'O-9'])] },
-                                 /cannot be combined with separate ventilation/]
+                                 /cannot be combined with separate ventilation/],
+      'mixed recovery types' => [lambda {
+        [rtu.call, rtu.call('D-2'), recovery.call(['D-1']), recovery.call(['D-2'], id: 'O-2', type: 'Energy recovery ventilator')]
+      }, /Mixed heat and energy recovery/]
     }.each do |label, (results, message)|
       it "falls back for #{label}" do
         plan = plan_for(instance_exec(&results), hvac_systems)
@@ -177,7 +192,7 @@ RSpec.describe BOSS::BaselineHvacPlanner do
       expect(plan.status).to eq(:topology), plan.messages.join("\n")
       expect(plan.steps.first[:arguments]).to include(topology_measure: 'hvac_packaged_rooftop_heat_pump',
                                                       topology_arguments_json: '{"supplemental_heating_fuel":"NaturalGas"}')
-      expect(plan.steps.last[:measure_dir_name]).to eq('upgrade_hvac_exhaust_air_energy_or_heat_recovery')
+      expect(plan.steps.last[:measure_dir_name]).to eq('modify_existing_heat_recovery')
     end
 
     ['Example_ASHRAE_L2_Report.xml', 'BuildingEQ-1.0.0.xml'].each do |file_name|
@@ -200,6 +215,7 @@ RSpec.describe BOSS::BaselineHvacPlanner do
       expect(recovery.status).to eq(:match), recovery.messages.join(' ')
       expect(recovery.record_ids.drop(1)).to eq(['Delivery-45022120'])
       expect(recovery.messages.join).to match(/Integration inferred/)
+      expect(recovery.measure_arguments).to eq('ventilation_type' => 'Energy recovery ventilator')
     end
   end
 
