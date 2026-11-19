@@ -129,7 +129,7 @@ RSpec.describe 'BOSS' do
       updated = steps['modify_existing_heat_recovery'][:result][:step_values]
                 .find { |value| value[:name] == 'heat_exchangers_updated' }
       expect(updated[:value]).to eq(created.to_i)
-      model = OpenStudio::Model::Model.load(File.join(output_path, 'baseline', 'run', 'in.osm')).get
+      model = OpenStudio::Model::Model.load(File.join(output_path, 'baseline', 'in.osm')).get
       model.getHeatExchangerAirToAirSensibleAndLatents.each do |hx|
         expect(hx.latentEffectivenessat100HeatingAirFlow).to be_within(1e-6).of(0.61 * 0.9)
       end
