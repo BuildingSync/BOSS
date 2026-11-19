@@ -14,14 +14,29 @@ local_measure_roots:
 # - name: local checkout folder name under vendor/external_measures
 # - url: git repository URL
 # - ref: pinned tag/branch/commit to checkout
+# - local_path (instead of url/ref): existing local checkout, relative to this file.
+#   BOSS uses it in place and never runs Git against it; a missing path is an error.
 # - measure_roots: one or more paths inside the repo that contain measure directories
+# - scenario_only (optional, default false): when true, measure roots are added only to
+#   workflows that opt in (baseline/in.osw with a detailed HVAC topology); fallback
+#   baselines omit them, so they do not require this checkout
 #
 
 # The below measures are needed for the BOSS L200 workflow.
 repos:
   - name: comstock
     url: https://github.com/NatLabRockies/comstock.git
-    ref: main
+    # Pinned: later revisions require the comstock-typical gem in
+    # upgrade_hvac_exhaust_air_energy_or_heat_recovery, which BOSS does not bundle.
+    ref: 393de7bf86479537f42ea36c91dd2ec7ae1259ea
     measure_roots:
       - measures
       - resources/measures
+
+  # BuildingSync HVAC topology measures. Not released as a gem, so BOSS
+  # loads the sibling checkout ../buildingsync-measures-gem (CI pins its commit).
+  - name: buildingsync-measures-gem
+    local_path: ../../buildingsync-measures-gem
+    measure_roots:
+      - lib/measures
+    scenario_only: true

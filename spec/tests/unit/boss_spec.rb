@@ -24,21 +24,283 @@ RSpec.describe BOSS::Boss do
     allow(BOSS::BCLWeatherFileDownloader)
       .to receive(:download_weather_file_from_city_name)
       .and_return(openstudio_weather_file_path)
+  end
 
-    # Stub all OSWArgPopulator class methods so they are no-ops; we only care
-    # about measure_paths ordering, not the steps payload.
+  def stub_measure_dirs(local:, external:, discovered:, scenario_only: [])
+    allow(OpenStudio::Extension).to receive(:configure_osw) do |osw|
+      osw[:measure_paths] = discovered
+    end
+
+    fake_manager = instance_double(BOSS::ExternalMeasureRepoManager)
+    allow(BOSS::ExternalMeasureRepoManager).to receive(:new).and_return(fake_manager)
+    allow(fake_manager).to receive(:local_measure_directories).and_return(local)
+    allow(fake_manager).to receive(:resolved_measure_directories).and_return(external)
+    allow(fake_manager).to receive(:resolved_measure_directories)
+      .with(include_scenario_only: true).and_return(external + scenario_only)
+  end
+
+  def build_reader(xml_file_name)
+    xml = File.read(File.join(BOSS_SPEC_FILES_DIR, 'v2.7.0', xml_file_name))
+    doc = REXML::Document.new(xml, ignore_whitespace_nodes: :all)
+    BOSS::BuildingSyncReader.new(doc, openstudio_weather_file_path, ASHRAE90_1)
+  end
+
+  def common_steps(climate_zone)
+    {
+      run_period: {
+        measure_dir_name: 'set_run_period',
+        arguments: { __SKIP__: false, timesteps_per_hour: '4', begin_date: '2019-01-01', end_date: '2019-12-31' }
+      },
+      location: {
+        measure_dir_name: 'ChangeBuildingLocation',
+        arguments: { __SKIP__: false, weather_file_name: File.expand_path(openstudio_weather_file_path), climate_zone: }
+      },
+      results: { measure_dir_name: 'openstudio_results', arguments: { __SKIP__: false, reg_monthly_details: true } }
+    }
+  end
+
+  let(:building_151_steps) do
+    common = common_steps('ASHRAE 169-2013-3C')
     [
-      :populate_set_run_period_args,
-      :populate_change_building_location_args,
-      :populate_create_bar_from_building_type_ratios_args,
-      :populate_create_typical_building_from_model_args,
-      :populate_set_lighting_loads_by_LPD_args,
-      :populate_set_electric_equipment_loads_by_epd_args,
-      :populate_openstudio_results_args
-    ].each { |m| allow(OSWArgPopulator).to receive(m) }
+      common[:run_period],
+      common[:location],
+      {
+        measure_dir_name: 'create_bar_from_building_type_ratios',
+        arguments: {
+          __SKIP__: false, bldg_type_a: 'RetailStandalone', total_bldg_floor_area: 69452.0, floor_height: 0.0,
+          num_stories_above_grade: 1.0, num_stories_below_grade: 0.0, template: 'DOE Ref 1980-2004',
+          ns_to_ew_ratio: 3.6732677131179763, story_multiplier_method: 'None'
+        }
+      },
+      {
+        measure_dir_name: 'create_typical_building_from_model',
+        arguments: { __SKIP__: false, template: 'DOE Ref 1980-2004', system_type: 'Inferred', add_swh: true, add_hvac: true, use_upstream_args: false }
+      },
+      { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: true } },
+      { measure_dir_name: 'set_electric_equipment_loads_by_epd', arguments: { __SKIP__: true } },
+      { measure_dir_name: 'replace_baseline_windows', arguments: { __SKIP__: true } },
+      common[:results]
+    ]
+  end
+
+  let(:all_measures_steps) do
+    common = common_steps('ASHRAE 169-2013-5B')
+    [
+      common[:run_period],
+      common[:location],
+      {
+        measure_dir_name: 'create_bar_from_building_type_ratios',
+        arguments: {
+          __SKIP__: false, bldg_type_a: 'SmallOffice', total_bldg_floor_area: 15000.0, floor_height: 10.0,
+          num_stories_above_grade: 2.0, num_stories_below_grade: 0.0, template: 'DOE Ref 1980-2004',
+          ns_to_ew_ratio: 1.5, story_multiplier_method: 'None'
+        }
+      },
+      {
+        measure_dir_name: 'create_typical_building_from_model',
+        arguments: {
+          __SKIP__: false, template: 'DOE Ref 1980-2004', system_type: 'PSZ-AC with gas unit heaters',
+          add_swh: true, add_hvac: true, use_upstream_args: false
+        }
+      },
+      { measure_dir_name: 'SetLightingLoadsByLPD', arguments: { __SKIP__: false, lpd: 1.0 } },
+      { measure_dir_name: 'set_electric_equipment_loads_by_epd', arguments: { __SKIP__: false, epd: 1.0 } },
+      {
+        measure_dir_name: 'replace_baseline_windows',
+        arguments: { __SKIP__: false, window_pane_type: 'Double - No LowE - Clear - Aluminum', u_value_ip: '0.50', shgc: '0.39', vlt: '0.39' }
+      },
+      common[:results]
+    ]
+  end
+
+  describe '.write_baseline_osw generated baseline' do
+    before do
+      stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir])
+    end
+
+    {
+      'building_151.xml' => :building_151_steps,
+      'all_measures_applied_example.xml' => :all_measures_steps
+    }.each do |xml_file_name, expected_steps|
+      it "keeps every baseline step and argument for #{xml_file_name}" do
+        Dir.mktmpdir do |output_dir|
+          xml = File.join(BOSS_SPEC_FILES_DIR, 'v2.7.0', xml_file_name)
+          osw_path = described_class.write_baseline_osw(xml, output_dir, openstudio_weather_file_path, ASHRAE90_1)
+
+          expect(osw_path).to eq File.join(output_dir, 'baseline', 'in.osw')
+          expect(Dir.children(output_dir)).to eq ['baseline']
+          expect(Dir.children(File.join(output_dir, 'baseline'))).to eq ['in.osw']
+
+          osw = JSON.parse(File.read(osw_path), symbolize_names: true)
+          expect(osw[:steps]).to eq send(expected_steps)
+          expect(osw.keys).to eq [:seed_file, :weather_file, :measure_paths, :file_paths, :run_directory, :steps, :name, :description]
+          expect(osw.values_at(:seed_file, :weather_file, :run_directory, :name, :description)).to all(be_nil)
+        end
+      end
+    end
+
+    it 'raises the existing error for a missing XML file without writing output' do
+      Dir.mktmpdir do |output_dir|
+        missing = File.join(output_dir, 'missing.xml')
+        expect { described_class.write_baseline_osw(missing, output_dir, nil, ASHRAE90_1) }
+          .to raise_error(RuntimeError, "File '#{missing}' does not exist")
+        expect(Dir.children(output_dir)).to be_empty
+      end
+    end
+
+    it 'writes into nested output paths with spaces' do
+      Dir.mktmpdir do |tmp|
+        output_dir = File.join(tmp, 'nested dir', 'out')
+        osw_path = described_class.write_baseline_osw(
+          File.join(BOSS_SPEC_FILES_DIR, 'v2.7.0', 'building_151.xml'), output_dir, nil, ASHRAE90_1
+        )
+        expect(osw_path).to eq File.join(output_dir, 'baseline', 'in.osw')
+        expect(File.file?(osw_path)).to be true
+      end
+    end
+
+    it 'does not run workflows while writing' do
+      expect(OpenStudio::Extension::Runner).not_to receive(:new)
+      Dir.mktmpdir do |output_dir|
+        described_class.write_baseline_osw(File.join(BOSS_SPEC_FILES_DIR, 'v2.7.0', 'building_151.xml'), output_dir, nil, ASHRAE90_1)
+      end
+    end
+  end
+
+  describe '.build_baseline_osw' do
+    before do
+      stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir])
+    end
+
+    it 'is private while the public API stays public' do
+      expect(described_class.private_methods).to include(:build_baseline_osw)
+      expect(described_class.public_methods).to include(:write_baseline_osw, :run_baseline_osw)
+      expect(described_class.method(:write_baseline_osw).arity).to eq 4
+      expect(described_class.method(:run_baseline_osw).arity).to eq 1
+    end
+
+    it 'returns the same steps as the writer without writing files' do
+      Dir.mktmpdir do |output_dir|
+        Dir.chdir(output_dir) do
+          osw = described_class.send(:build_baseline_osw, build_reader('all_measures_applied_example.xml'))
+          expect(osw[:steps]).to eq all_measures_steps
+          expect(Dir.children(output_dir)).to be_empty
+        end
+      end
+    end
+
+    it 'returns a fresh workflow on every call' do
+      reader = build_reader('all_measures_applied_example.xml')
+      first = described_class.send(:build_baseline_osw, reader)
+      first[:steps].first[:arguments][:timesteps_per_hour] = '1'
+      first[:steps] << { measure_dir_name: 'extra', arguments: {} }
+      first[:measure_paths] << '/mutated'
+      first[:file_paths] << '/mutated'
+
+      second = described_class.send(:build_baseline_osw, reader)
+      expect(second[:steps]).to eq all_measures_steps
+      expect(second[:measure_paths]).not_to include('/mutated')
+      expect(second[:file_paths]).not_to include('/mutated')
+    end
+
+    it 'replaces create_typical HVAC with planned topology steps and adds gated topology measure paths' do
+      stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir],
+                        scenario_only: ['/bsync/measures'])
+      steps = [{ measure_dir_name: 'apply_hvac_topology_to_zone_scope', arguments: { topology_measure: 'hvac_ptac' } },
+               { measure_dir_name: 'apply_standard_hvac_sizing_and_efficiency', arguments: {} }]
+      plan = BOSS::BaselineHvacPlanner::Plan.new(status: :topology, steps: steps, messages: [])
+      allow_any_instance_of(BOSS::BaselineHvacPlanner).to receive(:plan).and_return(plan)
+
+      osw = described_class.send(:build_baseline_osw, build_reader('all_measures_applied_example.xml'))
+      names = osw[:steps].map { |step| step[:measure_dir_name] }
+      typical = names.index('create_typical_building_from_model')
+
+      expect(osw[:steps][typical][:arguments][:add_hvac]).to be false
+      expect(names[typical + 1, 2]).to eq(steps.map { |step| step[:measure_dir_name] })
+      expect(names - steps.map { |step| step[:measure_dir_name] }).to eq(all_measures_steps.map { |step| step[:measure_dir_name] })
+      expect(osw[:measure_paths]).to include('/bsync/measures')
+    end
+
+    it 'keeps fallback measure paths free of gated topology repos' do
+      stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir],
+                        scenario_only: ['/bsync/measures'])
+
+      osw = described_class.send(:build_baseline_osw, build_reader('all_measures_applied_example.xml'))
+      expect(osw[:steps]).to eq all_measures_steps
+      expect(osw[:measure_paths]).not_to include('/bsync/measures')
+    end
+
+    it 'builds a PSZ-HP topology baseline for the small office level 2 example' do
+      stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir])
+
+      osw = described_class.send(:build_baseline_osw, build_reader('example-smalloffice-level2.xml'))
+      names = osw[:steps].map { |step| step[:measure_dir_name] }
+      typical = names.index('create_typical_building_from_model')
+
+      expect(osw[:steps][typical][:arguments][:add_hvac]).to be false
+      expect(names[typical + 1, 2]).to eq %w[apply_hvac_topology_to_zone_scope apply_standard_hvac_sizing_and_efficiency]
+      expect(osw[:steps][typical + 1][:arguments]).to include(zone_scope: 'all_model_zones', operation: 'create')
+    end
+
+    it 'plans baseline HVAC without systems that measures propose' do
+      stub_measure_dirs(local: [LOCAL_MEASURES_DIR], external: [external_measure_dir], discovered: [gem_measure_dir])
+      planner = instance_double(BOSS::BaselineHvacPlanner)
+      allow(BOSS::BaselineHvacPlanner).to receive(:new).and_return(planner)
+      allow(BOSS::BaselineHvacPlanner).to receive(:proposed_system_ids).and_return(['Proposed'])
+      allow(planner).to receive(:plan)
+        .and_return(BOSS::BaselineHvacPlanner::Plan.new(status: :fallback, steps: [], messages: []))
+
+      described_class.send(:build_baseline_osw, build_reader('all_measures_applied_example.xml'))
+      expect(planner).to have_received(:plan).with(anything, 'DOE Ref 1980-2004', exclude_system_ids: ['Proposed'])
+    end
+
+    it 'does not load scenario planning code' do
+      expect(defined?(BOSS::ScenarioHvacPlanner)).to be_nil
+      expect(defined?(BOSS::ScenarioMeasureMapper)).to be_nil
+    end
   end
 
   describe '.write_baseline_osw measure_paths ordering' do
+    before do
+      # Steps are covered above; these examples only check path ordering.
+      [
+        :populate_set_run_period_args,
+        :populate_change_building_location_args,
+        :populate_create_bar_from_building_type_ratios_args,
+        :populate_create_typical_building_from_model_args,
+        :populate_set_lighting_loads_by_LPD_args,
+        :populate_set_electric_equipment_loads_by_epd_args,
+        :populate_replace_baseline_windows_args,
+        :populate_openstudio_results_args
+      ].each { |m| allow(OSWArgPopulator).to receive(m) }
+    end
+
+    it 'orders measure_paths and file_paths exactly as local, gem, then external' do
+      Dir.mktmpdir do |output_dir|
+        stub_measure_dirs(local: ['/fake/local/measures'], external: [external_measure_dir], discovered: [gem_measure_dir])
+
+        osw_path = described_class.write_baseline_osw(xml_path, output_dir, nil, ASHRAE90_1)
+        osw = JSON.parse(File.read(osw_path), symbolize_names: true)
+
+        expect(osw[:measure_paths]).to eq ['/fake/local/measures', gem_measure_dir, external_measure_dir]
+        expect(osw[:file_paths]).to eq ['/fake/local/files', '/fake/external/files']
+      end
+    end
+
+    it 'drops nil, empty, and cross-tier duplicate paths without reordering' do
+      Dir.mktmpdir do |output_dir|
+        stub_measure_dirs(
+          local: ['/fake/local/measures'],
+          external: [external_measure_dir],
+          discovered: [external_measure_dir, nil, '', '/fake/local/measures', gem_measure_dir, gem_measure_dir]
+        )
+
+        osw_path = described_class.write_baseline_osw(xml_path, output_dir, nil, ASHRAE90_1)
+        osw = JSON.parse(File.read(osw_path), symbolize_names: true)
+
+        expect(osw[:measure_paths]).to eq ['/fake/local/measures', gem_measure_dir, external_measure_dir]
+      end
+    end
     it 'places local measures first, then gem-provided measures, then external repo measures' do
       Dir.mktmpdir do |output_dir|
 
@@ -109,6 +371,46 @@ RSpec.describe BOSS::Boss do
 
         measure_paths = JSON.parse(File.read(osw_path), symbolize_names: true)[:measure_paths]
         expect(measure_paths.count(LOCAL_MEASURES_DIR)).to eq 1
+      end
+    end
+  end
+
+  describe 'running OSWs' do
+    let(:runner) { instance_double(OpenStudio::Extension::Runner, run_osws: []) }
+    let(:runner_options) { { run_simulations: true, verbose: false, num_parallel: 7, max_to_run: Float::INFINITY } }
+
+    before do
+      allow(OpenStudio::Extension::Runner).to receive(:new).and_return(runner)
+      allow(BOSS.BOSS_logger).to receive(:warn)
+      allow(OpenStudio).to receive(:logFree)
+    end
+
+    def touch_osw(*parts)
+      path = File.join(*parts, 'in.osw')
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, '{}')
+      path
+    end
+
+    describe '.run_baseline_osw' do
+      it 'runs only baseline/in.osw with the existing runner options and returns failures' do
+        Dir.mktmpdir do |dir|
+          baseline = touch_osw(dir, 'baseline')
+          touch_osw(dir, 'scenarios', 'Scenario1')
+          allow(runner).to receive(:run_osws).and_return(['failed'])
+
+          expect(described_class.run_baseline_osw(dir)).to eq ['failed']
+          expect(OpenStudio::Extension::Runner).to have_received(:new).with(Dir.pwd, [], runner_options)
+          expect(runner).to have_received(:run_osws).with([baseline])
+        end
+      end
+
+      it 'raises the existing error without building a runner when the baseline is missing' do
+        Dir.mktmpdir do |dir|
+          expect { described_class.run_baseline_osw(dir) }
+            .to raise_error(StandardError, /BOSS\.Boss\.run_baseline_osw: .*write_baseline_osw/)
+          expect(OpenStudio::Extension::Runner).not_to have_received(:new)
+        end
       end
     end
   end

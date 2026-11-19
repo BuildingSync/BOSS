@@ -47,15 +47,24 @@ module BOSS
         install_repo(repo_entry)
       end
 
-      resolved_measure_directories
+      resolved_measure_directories(include_scenario_only: true)
     end
 
-    def resolved_measure_directories
+    # Repos marked scenario_only: true are omitted by default (fallback baselines) and are
+    # only returned when include_scenario_only is true (e.g. HVAC topology baselines).
+    def resolved_measure_directories(include_scenario_only: false)
       return [] if !manifest_exists?
 
       directories = []
       repo_entries.each do |repo_entry|
+        next if repo_entry['scenario_only'] && !include_scenario_only
+
         repo_root = repo_checkout_dir(repo_entry)
+        if local_repo?(repo_entry) && !Dir.exist?(repo_root)
+          raise StandardError, "Local measure repository '#{repo_entry['name']}' not found at #{repo_root}. " \
+                               "Check out the repository there or update local_path in #{@manifest_path}."
+        end
+
         if !Dir.exist?(repo_root)
           message = "Repository '#{repo_entry['name']}' is not installed at #{repo_root}. Run rake measures:install_external."
           if defined?(OpenStudio) && OpenStudio.respond_to?(:logFree)
@@ -110,7 +119,7 @@ module BOSS
         raise StandardError, "Each repo entry in #{@manifest_path} must be a map"
       end
 
-      required = %w[name url ref measure_roots]
+      required = repo.key?('local_path') ? %w[name local_path measure_roots] : %w[name url ref measure_roots]
       missing = required.select { |key| repo[key].nil? || repo[key].to_s.empty? }
       if !missing.empty?
         raise StandardError, "Repo entry is missing required keys #{missing.join(', ')} in #{@manifest_path}"
@@ -124,10 +133,29 @@ module BOSS
       if !repo['measure_roots'].is_a?(Array) || repo['measure_roots'].empty?
         raise StandardError, "Repo '#{repo['name']}' must define a non-empty measure_roots array"
       end
+
+      if repo.key?('local_path') && (repo.key?('url') || repo.key?('ref'))
+        raise StandardError, "Repo '#{repo['name']}' must use either local_path or url/ref, not both"
+      end
+
+      if repo.key?('scenario_only') && ![true, false].include?(repo['scenario_only'])
+        raise StandardError, "Repo '#{repo['name']}' scenario_only must be true or false"
+      end
+
       repo
     end
 
+    # Local checkouts are used in place; BOSS never runs Git against them.
     def install_repo(repo_entry)
+      if local_repo?(repo_entry)
+        repo_dir = repo_checkout_dir(repo_entry)
+        if !Dir.exist?(repo_dir)
+          raise StandardError, "Local measure repository '#{repo_entry['name']}' not found at #{repo_dir}. " \
+                               "Check out the repository there or update local_path in #{@manifest_path}."
+        end
+        return
+      end
+
       repo_dir = repo_checkout_dir(repo_entry)
       measure_roots = repo_entry['measure_roots']
 
@@ -144,7 +172,13 @@ module BOSS
       run_git(%W[-C #{repo_dir} checkout --force FETCH_HEAD])
     end
 
+    def local_repo?(repo_entry)
+      repo_entry.key?('local_path')
+    end
+
     def repo_checkout_dir(repo_entry)
+      return File.expand_path(repo_entry['local_path'], File.dirname(File.expand_path(@manifest_path))) if local_repo?(repo_entry)
+
       File.join(@install_dir, repo_entry['name'])
     end
 

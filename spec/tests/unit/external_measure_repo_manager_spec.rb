@@ -166,6 +166,53 @@ RSpec.describe BOSS::ExternalMeasureRepoManager do
       end
     end
 
+    it 'leaves scenario_only repos out unless include_scenario_only is true' do
+      Dir.mktmpdir do |dir|
+        install_dir = File.join(dir, 'vendor')
+        shared_root = File.join(install_dir, 'shared_repo', 'measures')
+        scenario_root = File.join(install_dir, 'scenario_repo', 'lib', 'measures')
+        FileUtils.mkdir_p(shared_root)
+        FileUtils.mkdir_p(scenario_root)
+
+        yaml = <<~YAML
+          repos:
+            - name: scenario_repo
+              url: https://example.com/scenario.git
+              ref: abc123
+              measure_roots:
+                - lib/measures
+              scenario_only: true
+            - name: shared_repo
+              url: https://example.com/shared.git
+              ref: main
+              measure_roots:
+                - measures
+              scenario_only: false
+        YAML
+        mgr = manager_for(write_manifest(dir, yaml), install_dir)
+
+        expect(mgr.resolved_measure_directories).to eq [shared_root]
+        expect(mgr.resolved_measure_directories(include_scenario_only: true)).to eq [scenario_root, shared_root]
+      end
+    end
+
+    it 'rejects a non-boolean scenario_only value' do
+      Dir.mktmpdir do |dir|
+        yaml = <<~YAML
+          repos:
+            - name: my_repo
+              url: https://example.com/repo.git
+              ref: main
+              measure_roots:
+                - measures
+              scenario_only: "yes"
+        YAML
+        mgr = manager_for(write_manifest(dir, yaml), dir)
+
+        expect { mgr.resolved_measure_directories }.to raise_error(StandardError, /scenario_only must be true or false/)
+      end
+    end
+
     it 'skips repo if checkout directory does not exist' do
       Dir.mktmpdir do |dir|
         install_dir = File.join(dir, 'vendor')
@@ -306,6 +353,65 @@ RSpec.describe BOSS::ExternalMeasureRepoManager do
         yaml = "repos:\n  - just_a_string\n"
         path = write_manifest(dir, yaml)
         expect { manager_for(path, dir).configured? }.to raise_error(StandardError, /must be a map/)
+      end
+    end
+
+    it 'raises when a repo entry sets both local_path and url' do
+      Dir.mktmpdir do |dir|
+        yaml = <<~YAML
+          repos:
+            - name: my_repo
+              local_path: ../my_repo
+              url: https://example.com/repo.git
+              measure_roots: [lib/measures]
+        YAML
+        path = write_manifest(dir, yaml)
+        expect { manager_for(path, dir).configured? }.to raise_error(StandardError, /either local_path or url/)
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  describe 'local_path repos' do
+    def local_manifest(dir, scenario_only: false)
+      config_dir = File.join(dir, 'config')
+      FileUtils.mkdir_p(config_dir)
+      yaml = <<~YAML
+        repos:
+          - name: sibling
+            local_path: ../sibling
+            scenario_only: #{scenario_only}
+            measure_roots: [lib/measures]
+      YAML
+      write_manifest(config_dir, yaml)
+    end
+
+    it 'resolves measure roots relative to the manifest without running git' do
+      Dir.mktmpdir do |dir|
+        mroot = File.join(dir, 'sibling', 'lib', 'measures')
+        FileUtils.mkdir_p(mroot)
+        mgr = manager_for(local_manifest(dir), File.join(dir, 'vendor'))
+        expect(mgr).not_to receive(:run_git)
+
+        mgr.install_all
+        expect(mgr.resolved_measure_directories).to eq([File.expand_path(mroot)])
+      end
+    end
+
+    it 'raises an actionable error when the local checkout is missing' do
+      Dir.mktmpdir do |dir|
+        mgr = manager_for(local_manifest(dir), File.join(dir, 'vendor'))
+        expect(mgr).not_to receive(:run_git)
+
+        expect { mgr.install_all }.to raise_error(StandardError, /Local measure repository 'sibling' not found/)
+        expect { mgr.resolved_measure_directories }.to raise_error(StandardError, /local_path/)
+      end
+    end
+
+    it 'skips a missing scenario-only local checkout for baseline resolution' do
+      Dir.mktmpdir do |dir|
+        mgr = manager_for(local_manifest(dir, scenario_only: true), File.join(dir, 'vendor'))
+        expect(mgr.resolved_measure_directories).to eq([])
       end
     end
   end
