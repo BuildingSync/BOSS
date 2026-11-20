@@ -330,6 +330,25 @@ RSpec.describe 'BuildingSyncReader' do
   describe 'get_principal_HVAC_system_type should' do
   end
 
+  describe 'get_hvac_systems_xml should' do
+    def reader_for(file_name)
+      path = File.expand_path("../../files/v2.7.0/#{file_name}", __dir__)
+      doc = REXML::Document.new(File.read(path), ignore_whitespace_nodes: :all)
+      BOSS::BuildingSyncReader.new(doc, nil, ASHRAE90_1)
+    end
+
+    it 'return the facility HVACSystems element' do
+      hvac_systems = reader_for('example-smalloffice-level2.xml').get_hvac_systems_xml
+      expect(hvac_systems.name).to eq 'HVACSystems'
+      expect(hvac_systems.elements.to_a.map(&:name).uniq).to eq ['HVACSystem']
+    end
+
+    it 'return nil when the facility has no HVACSystems' do
+      reader = BOSS::BuildingSyncReader.new(REXML::Document.new(wrap_in_site('')), nil, ASHRAE90_1)
+      expect(reader.get_hvac_systems_xml).to be_nil
+    end
+  end
+
   describe 'get_total_installed_power should' do
     def wrap_in_systems(xml)
       <<~XML

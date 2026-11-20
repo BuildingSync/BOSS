@@ -16,6 +16,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Pinned commit (buildingsync-measures-gem develop, includes PR #6) of the sibling checkout
+  # that config/external_measure_repos.yml loads via local_path.
+  BSYNC_MEASURES_REF: 57eec35b4d1d0c36dca3de2181a0164c35e75bd7
+
 jobs:
   unit:
     name: unit
@@ -25,17 +30,29 @@ jobs:
     env:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
+    defaults:
+      run:
+        working-directory: BOSS
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        path: BOSS
+    # Not released as a gem; config/external_measure_repos.yml loads it from ../buildingsync-measures-gem.
+    - name: Checkout buildingsync-measures-gem
+      uses: actions/checkout@v4
+      with:
+        repository: BuildingSync/buildingsync-measures-gem
+        ref: ${{ env.BSYNC_MEASURES_REF }}
+        path: buildingsync-measures-gem
     - name: Cache gems
       uses: actions/cache@v4
       with:
         path: .bundle/install
-        key: gems-${{ runner.os }}-os3.10.0-${{ hashFiles('Gemfile.lock', '*.gemspec') }}
+        key: gems-${{ runner.os }}-os3.10.0-${{ hashFiles('BOSS/Gemfile.lock', 'BOSS/*.gemspec') }}
     - name: Setup
       run: |
-        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        git config --global --add safe.directory '*'
         gem install bundler -v 2.4.10
         bundle config set --local path "$GITHUB_WORKSPACE/.bundle/install"
         bundle install
@@ -90,19 +107,30 @@ jobs:
       LC_ALL: C.UTF-8
       BOSS_SHARD: ${{ matrix.shard }}
       BOSS_SHARDS: '4'
+    defaults:
+      run:
+        working-directory: BOSS
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        path: BOSS
+    - name: Checkout buildingsync-measures-gem
+      uses: actions/checkout@v4
+      with:
+        repository: BuildingSync/buildingsync-measures-gem
+        ref: ${{ env.BSYNC_MEASURES_REF }}
+        path: buildingsync-measures-gem
     - name: Cache gems
       uses: actions/cache@v4
       with:
         path: .bundle/install
-        key: gems-${{ runner.os }}-os3.10.0-${{ hashFiles('Gemfile.lock', '*.gemspec') }}
+        key: gems-${{ runner.os }}-os3.10.0-${{ hashFiles('BOSS/Gemfile.lock', 'BOSS/*.gemspec') }}
     - name: Cache external measures
       uses: actions/cache@v4
       with:
-        path: vendor/external_measures
-        key: ext-measures-${{ hashFiles('config/external_measure_repos.yml') }}
+        path: BOSS/vendor/external_measures
+        key: ext-measures-${{ hashFiles('BOSS/config/external_measure_repos.yml') }}
     - name: Setup
       run: |
         git config --global --add safe.directory '*'
@@ -117,4 +145,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: integration-output-shard-${{ matrix.shard }}
-        path: spec/output
+        path: BOSS/spec/output

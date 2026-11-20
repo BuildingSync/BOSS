@@ -37,6 +37,7 @@ The shipped manifest lives at [config/external_measure_repos.yml](config/externa
 
 - local measure roots: `lib/measures` (first in precedence)
 - external repository: comstock (`measures` and `resources/measures`)
+- local checkout: `buildingsync-measures-gem` (`lib/measures`), expected as a sibling of this repository (`../buildingsync-measures-gem`). It is marked `scenario_only` and is added to `measure_paths` only for baselines that use an HVAC topology. CI pins its commit via `BSYNC_MEASURES_REF` in [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 Measure path precedence is:
 
@@ -45,6 +46,40 @@ Measure path precedence is:
 3. external non-gem repository measure roots from [config/external_measure_repos.yml](config/external_measure_repos.yml)
 
 The generated `in.osw` will include these paths in order under `measure_paths`.
+
+### Baseline HVAC
+
+When the facility's detailed (L200) `HVACSystems` exactly match a supported topology, the baseline sets `create_typical_building_from_model`'s `add_hvac` to `false` and adds `apply_hvac_topology_to_zone_scope` (operation `create`) and `apply_standard_hvac_sizing_and_efficiency` from buildingsync-measures-gem. Supported templates are DOE Ref Pre-1980, DOE Ref 1980-2004, and 90.1-2004 through 90.1-2019. HVAC systems referenced by measures as proposed (`AlternativeSystemReplacement` or `ModifiedSystem`) are excluded from the baseline.
+
+Configurations that can produce a topology baseline:
+
+| Configuration | Topology measure |
+|---|---|
+| Packaged Terminal Air Conditioner | `hvac_ptac` |
+| Packaged Terminal Heat Pump | `hvac_pthp` |
+| Four Pipe Fan Coil Unit | `hvac_four_pipe_fan_coil` |
+| Packaged Rooftop Air Conditioner | `hvac_packaged_rooftop_ac` |
+| Packaged Rooftop Heat Pump | `hvac_packaged_rooftop_heat_pump` |
+| Packaged Rooftop VAV with Hot Water Reheat | `hvac_packaged_rooftop_vav_hw_reheat` |
+| VAV with Hot Water Reheat | `hvac_vav_hw_reheat` |
+| Warm Air Furnace | `hvac_warm_air_furnace` |
+| VRF Terminal Unit | `hvac_vrf` |
+
+A Ventilation Only (`hvac_ventilation_only`) or Dedicated Outdoor Air System (`hvac_doas`) configuration can be added on top, but only alongside PTAC, PTHP, four-pipe fan coil, or VRF.
+
+Recognized but not yet mapped (always fall back): Packaged Rooftop VAV with Electric Reheat, VAV with Electric Reheat, Water Loop Heat Pump, Ground Source Heat Pump, Chilled Beam, and hydronic radiant systems.
+
+BOSS also falls back when:
+
+- any selected `HVACSystem` does not match a supported configuration;
+- there is not exactly one conditioning configuration, or there is more than one ventilation configuration;
+- ventilation is paired with a conditioning type that does not allow it;
+- the template is not supported;
+- a system's premises are scoped to specific zones rather than the whole building (the baseline binds topologies to all model zones only).
+
+On fallback, BOSS uses the `system_type` mapping below with `add_hvac` set to `true`, and logs a warning explaining why.
+
+Integration simulations currently cover the packaged rooftop heat pump; the other configurations are covered by unit specs.
 
 ## OpenStudio Compatibility Version
 
@@ -96,7 +131,7 @@ The table below maps in detail the BuildingSync XML data to measure inputs. Note
 |                                        | template                | get_standard_template                     | either `.../Building/YearOfLastMajorRemodel` or `.../Building/YearOfConstruction`                                                |
 |                                        | system_type             | get_principal_HVAC_system_type            | at least one mappable entry of `.../Systems/HVACSystems/HVACSystem/PrincipalHVACSystemType`                                                                                  |
 |                                        | add_swh                 |                                           | Hard Coded to to true                                                                                  |
-|                                        | add_hvac                |                                           | Hard Coded to to true                                                                                  |
+|                                        | add_hvac                |                                           | `true` for fallback baselines; `false` when an HVAC topology is applied (see [Baseline HVAC](#baseline-hvac))                                                                                  |
 | [SetLightingLoadsByLPD]                |                         |                                           |                                                                                                                                   |
 |                                        | lpd                     | get_total_installed_power                 | `/InstalledPower` in ALL instances of `.../Systems/LightingSystems/LightingSystem`                                                                                   |
 | [set_electric_equipment_loads_by_epd]  |                         |                                           |                                                                                                                                   |
