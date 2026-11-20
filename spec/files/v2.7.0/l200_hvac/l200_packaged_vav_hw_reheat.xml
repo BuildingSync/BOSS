@@ -201,7 +201,53 @@
       </Sites>
       <Systems>
         <HVACSystems>
-          <HVACSystem ID="HVACSystem-1"><Plants><HeatingPlants><HeatingPlant ID="HeatingPlant-1"><Boiler><BoilerType>Hot water</BoilerType></Boiler><PrimaryFuel>Natural gas</PrimaryFuel></HeatingPlant></HeatingPlants></Plants><HeatingAndCoolingSystems><ZoningSystemType>Multi zone</ZoningSystemType><HeatingSources><HeatingSource ID="HeatingSource-1"><HeatingSourceType><SourceHeatingPlantID IDref="HeatingPlant-1"/></HeatingSourceType><HeatingMedium>Hot water</HeatingMedium></HeatingSource></HeatingSources><CoolingSources><CoolingSource ID="CoolingSource-1"><CoolingSourceType><DX><DXSystemType>Packaged/unitary direct expansion/RTU</DXSystemType></DX></CoolingSourceType><Quantity>1</Quantity></CoolingSource></CoolingSources><Deliveries><Delivery ID="Delivery-1"><DeliveryType><CentralAirDistribution><AirDeliveryType>Central fan</AirDeliveryType><TerminalUnit>VAV terminal box not fan powered with reheat</TerminalUnit><ReheatSource>Heating plant</ReheatSource><ReheatPlantID IDref="HeatingPlant-1"/></CentralAirDistribution></DeliveryType><HeatingSourceID IDref="HeatingSource-1"/><CoolingSourceID IDref="CoolingSource-1"/></Delivery></Deliveries></HeatingAndCoolingSystems><LinkedPremises>
+          <HVACSystem ID="HVACSystem-1">
+            <Plants>
+              <HeatingPlants>
+                <HeatingPlant ID="HeatingPlant-1">
+                  <Boiler>
+                    <BoilerType>Hot water</BoilerType>
+                  </Boiler>
+                  <PrimaryFuel>Natural gas</PrimaryFuel>
+                </HeatingPlant>
+              </HeatingPlants>
+            </Plants>
+            <HeatingAndCoolingSystems>
+              <ZoningSystemType>Multi zone</ZoningSystemType>
+              <HeatingSources>
+                <HeatingSource ID="HeatingSource-1">
+                  <HeatingSourceType>
+                    <SourceHeatingPlantID IDref="HeatingPlant-1"/>
+                  </HeatingSourceType>
+                  <HeatingMedium>Hot water</HeatingMedium>
+                </HeatingSource>
+              </HeatingSources>
+              <CoolingSources>
+                <CoolingSource ID="CoolingSource-1">
+                  <CoolingSourceType>
+                    <DX>
+                      <DXSystemType>Packaged/unitary direct expansion/RTU</DXSystemType>
+                    </DX>
+                  </CoolingSourceType>
+                  <Quantity>1</Quantity>
+                </CoolingSource>
+              </CoolingSources>
+              <Deliveries>
+                <Delivery ID="Delivery-1">
+                  <DeliveryType>
+                    <CentralAirDistribution>
+                      <AirDeliveryType>Central fan</AirDeliveryType>
+                      <TerminalUnit>VAV terminal box not fan powered with reheat</TerminalUnit>
+                      <ReheatSource>Heating plant</ReheatSource>
+                      <ReheatPlantID IDref="HeatingPlant-1"/>
+                    </CentralAirDistribution>
+                  </DeliveryType>
+                  <HeatingSourceID IDref="HeatingSource-1"/>
+                  <CoolingSourceID IDref="CoolingSource-1"/>
+                </Delivery>
+              </Deliveries>
+            </HeatingAndCoolingSystems>
+            <LinkedPremises>
               <Section>
                 <LinkedSectionID IDref="Section-office">
                   <LinkedScheduleIDs>
@@ -209,7 +255,8 @@
                   </LinkedScheduleIDs>
                 </LinkedSectionID>
               </Section>
-            </LinkedPremises></HVACSystem>
+            </LinkedPremises>
+          </HVACSystem>
         </HVACSystems>
         <LightingSystems>
           <LightingSystem ID="LightingSystem-1">

@@ -201,7 +201,72 @@
       </Sites>
       <Systems>
         <HVACSystems>
-          <HVACSystem ID="HVACSystem-1"><Plants><HeatingPlants><HeatingPlant ID="HeatingPlant-1"><Boiler><BoilerType>Hot water</BoilerType></Boiler><PrimaryFuel>Natural gas</PrimaryFuel></HeatingPlant></HeatingPlants><CoolingPlants><CoolingPlant ID="CoolingPlant-1"><Chiller><ChillerType>Vapor compression</ChillerType><ChillerCompressorDriver>Electric Motor</ChillerCompressorDriver><CondenserPlantIDs><CondenserPlantID IDref="CondenserPlant-Tower"/></CondenserPlantIDs></Chiller></CoolingPlant></CoolingPlants><CondenserPlants><CondenserPlant ID="CondenserPlant-Tower"><WaterCooled><WaterCooledCondenserType>Cooling tower</WaterCooledCondenserType></WaterCooled></CondenserPlant></CondenserPlants></Plants><HeatingAndCoolingSystems><HeatingSources><HeatingSource ID="HeatingSource-1"><HeatingSourceType><SourceHeatingPlantID IDref="HeatingPlant-1"/></HeatingSourceType><HeatingMedium>Hot water</HeatingMedium></HeatingSource></HeatingSources><CoolingSources><CoolingSource ID="CoolingSource-1"><CoolingSourceType><CoolingPlantID IDref="CoolingPlant-1"/></CoolingSourceType><CoolingMedium>Chilled water</CoolingMedium><Quantity>1</Quantity></CoolingSource></CoolingSources><Deliveries><Delivery ID="Delivery-1"><DeliveryType><ZoneEquipment><FanBased><FanBasedDistributionType><FanCoil><FanCoilType>Fan coil 4 pipe</FanCoilType></FanCoil></FanBasedDistributionType></FanBased></ZoneEquipment></DeliveryType><HeatingSourceID IDref="HeatingSource-1"/><CoolingSourceID IDref="CoolingSource-1"/></Delivery></Deliveries></HeatingAndCoolingSystems><LinkedPremises>
+          <HVACSystem ID="HVACSystem-1">
+            <Plants>
+              <HeatingPlants>
+                <HeatingPlant ID="HeatingPlant-1">
+                  <Boiler>
+                    <BoilerType>Hot water</BoilerType>
+                  </Boiler>
+                  <PrimaryFuel>Natural gas</PrimaryFuel>
+                </HeatingPlant>
+              </HeatingPlants>
+              <CoolingPlants>
+                <CoolingPlant ID="CoolingPlant-1">
+                  <Chiller>
+                    <ChillerType>Vapor compression</ChillerType>
+                    <ChillerCompressorDriver>Electric Motor</ChillerCompressorDriver>
+                    <CondenserPlantIDs>
+                      <CondenserPlantID IDref="CondenserPlant-Tower"/>
+                    </CondenserPlantIDs>
+                  </Chiller>
+                </CoolingPlant>
+              </CoolingPlants>
+              <CondenserPlants>
+                <CondenserPlant ID="CondenserPlant-Tower">
+                  <WaterCooled>
+                    <WaterCooledCondenserType>Cooling tower</WaterCooledCondenserType>
+                  </WaterCooled>
+                </CondenserPlant>
+              </CondenserPlants>
+            </Plants>
+            <HeatingAndCoolingSystems>
+              <HeatingSources>
+                <HeatingSource ID="HeatingSource-1">
+                  <HeatingSourceType>
+                    <SourceHeatingPlantID IDref="HeatingPlant-1"/>
+                  </HeatingSourceType>
+                  <HeatingMedium>Hot water</HeatingMedium>
+                </HeatingSource>
+              </HeatingSources>
+              <CoolingSources>
+                <CoolingSource ID="CoolingSource-1">
+                  <CoolingSourceType>
+                    <CoolingPlantID IDref="CoolingPlant-1"/>
+                  </CoolingSourceType>
+                  <CoolingMedium>Chilled water</CoolingMedium>
+                  <Quantity>1</Quantity>
+                </CoolingSource>
+              </CoolingSources>
+              <Deliveries>
+                <Delivery ID="Delivery-1">
+                  <DeliveryType>
+                    <ZoneEquipment>
+                      <FanBased>
+                        <FanBasedDistributionType>
+                          <FanCoil>
+                            <FanCoilType>Fan coil 4 pipe</FanCoilType>
+                          </FanCoil>
+                        </FanBasedDistributionType>
+                      </FanBased>
+                    </ZoneEquipment>
+                  </DeliveryType>
+                  <HeatingSourceID IDref="HeatingSource-1"/>
+                  <CoolingSourceID IDref="CoolingSource-1"/>
+                </Delivery>
+              </Deliveries>
+            </HeatingAndCoolingSystems>
+            <LinkedPremises>
               <Section>
                 <LinkedSectionID IDref="Section-office">
                   <LinkedScheduleIDs>
@@ -209,7 +274,8 @@
                   </LinkedScheduleIDs>
                 </LinkedSectionID>
               </Section>
-            </LinkedPremises></HVACSystem>
+            </LinkedPremises>
+          </HVACSystem>
         </HVACSystems>
         <LightingSystems>
           <LightingSystem ID="LightingSystem-1">

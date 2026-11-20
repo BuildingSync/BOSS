@@ -6,6 +6,8 @@
 #
 #   ruby spec/files/v2.7.0/l200_hvac/generate.rb
 
+require 'rexml/document'
+
 BASE = File.expand_path('../example-smalloffice-level2-built-2012.xml', __dir__)
 
 def dx(type, condenser: nil, quantity: false)
@@ -108,12 +110,23 @@ def hvac_system(spec, ventilation, premises)
     "<Deliveries>#{delivery}</Deliveries></HeatingAndCoolingSystems>#{others}#{premises}</HVACSystem>"
 end
 
+# Indent the generated element to match the base file (HVACSystem sits at 10 spaces).
+def pretty(xml, indent)
+  doc = REXML::Document.new(xml.gsub(/>\s+</, '><'), attribute_quote: :quote)
+  formatter = REXML::Formatters::Pretty.new(2)
+  formatter.compact = true
+  formatter.width = 1000
+  out = +''
+  formatter.write(doc.root, out)
+  out.gsub("\n", "\n#{' ' * indent}")
+end
+
 base = File.read(BASE)
 block = base[%r{<HVACSystem ID="HVACSystem-1">.*?</HVACSystem>}m] or abort 'HVACSystem-1 not found'
 premises = block[%r{<LinkedPremises>.*?</LinkedPremises>}m] or abort 'LinkedPremises not found'
 
 EXAMPLES.each do |name, (conditioning, ventilation)|
-  xml = base.sub(block, hvac_system(CONDITIONING.fetch(conditioning), ventilation, premises))
+  xml = base.sub(block, pretty(hvac_system(CONDITIONING.fetch(conditioning), ventilation, premises), 10))
   File.write(File.join(__dir__, "l200_#{name}.xml"), xml)
   puts "l200_#{name}.xml"
 end

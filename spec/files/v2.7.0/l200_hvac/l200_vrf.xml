@@ -201,7 +201,56 @@
       </Sites>
       <Systems>
         <HVACSystems>
-          <HVACSystem ID="HVACSystem-1"><Plants><CondenserPlants><CondenserPlant ID="CondenserPlant-Air"><AirCooled/></CondenserPlant></CondenserPlants></Plants><HeatingAndCoolingSystems><HeatingSources><HeatingSource ID="HeatingSource-1"><HeatingSourceType><HeatPump><CoolingSourceID IDref="CoolingSource-1"/></HeatPump></HeatingSourceType></HeatingSource></HeatingSources><CoolingSources><CoolingSource ID="CoolingSource-1"><CoolingSourceType><DX><DXSystemType>Variable refrigerant flow</DXSystemType><CondenserPlantIDs><CondenserPlantID IDref="CondenserPlant-Air"/></CondenserPlantIDs></DX></CoolingSourceType><Quantity>1</Quantity></CoolingSource></CoolingSources><Deliveries><Delivery ID="Delivery-1"><DeliveryType><ZoneEquipment><FanBased><FanBasedDistributionType><FanCoil><FanCoilType>VRF terminal units</FanCoilType></FanCoil></FanBasedDistributionType></FanBased></ZoneEquipment></DeliveryType><HeatingSourceID IDref="HeatingSource-1"/><CoolingSourceID IDref="CoolingSource-1"/></Delivery></Deliveries></HeatingAndCoolingSystems><LinkedPremises>
+          <HVACSystem ID="HVACSystem-1">
+            <Plants>
+              <CondenserPlants>
+                <CondenserPlant ID="CondenserPlant-Air">
+                  <AirCooled/>
+                </CondenserPlant>
+              </CondenserPlants>
+            </Plants>
+            <HeatingAndCoolingSystems>
+              <HeatingSources>
+                <HeatingSource ID="HeatingSource-1">
+                  <HeatingSourceType>
+                    <HeatPump>
+                      <CoolingSourceID IDref="CoolingSource-1"/>
+                    </HeatPump>
+                  </HeatingSourceType>
+                </HeatingSource>
+              </HeatingSources>
+              <CoolingSources>
+                <CoolingSource ID="CoolingSource-1">
+                  <CoolingSourceType>
+                    <DX>
+                      <DXSystemType>Variable refrigerant flow</DXSystemType>
+                      <CondenserPlantIDs>
+                        <CondenserPlantID IDref="CondenserPlant-Air"/>
+                      </CondenserPlantIDs>
+                    </DX>
+                  </CoolingSourceType>
+                  <Quantity>1</Quantity>
+                </CoolingSource>
+              </CoolingSources>
+              <Deliveries>
+                <Delivery ID="Delivery-1">
+                  <DeliveryType>
+                    <ZoneEquipment>
+                      <FanBased>
+                        <FanBasedDistributionType>
+                          <FanCoil>
+                            <FanCoilType>VRF terminal units</FanCoilType>
+                          </FanCoil>
+                        </FanBasedDistributionType>
+                      </FanBased>
+                    </ZoneEquipment>
+                  </DeliveryType>
+                  <HeatingSourceID IDref="HeatingSource-1"/>
+                  <CoolingSourceID IDref="CoolingSource-1"/>
+                </Delivery>
+              </Deliveries>
+            </HeatingAndCoolingSystems>
+            <LinkedPremises>
               <Section>
                 <LinkedSectionID IDref="Section-office">
                   <LinkedScheduleIDs>
@@ -209,7 +258,8 @@
                   </LinkedScheduleIDs>
                 </LinkedSectionID>
               </Section>
-            </LinkedPremises></HVACSystem>
+            </LinkedPremises>
+          </HVACSystem>
         </HVACSystems>
         <LightingSystems>
           <LightingSystem ID="LightingSystem-1">

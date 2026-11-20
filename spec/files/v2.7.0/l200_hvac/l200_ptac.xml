@@ -201,7 +201,35 @@
       </Sites>
       <Systems>
         <HVACSystems>
-          <HVACSystem ID="HVACSystem-1"><HeatingAndCoolingSystems><HeatingSources><HeatingSource ID="HeatingSource-1"><HeatingSourceType><ElectricResistance/></HeatingSourceType></HeatingSource></HeatingSources><CoolingSources><CoolingSource ID="CoolingSource-1"><CoolingSourceType><DX><DXSystemType>Packaged terminal air conditioner (PTAC)</DXSystemType></DX></CoolingSourceType></CoolingSource></CoolingSources><Deliveries><Delivery ID="Delivery-1"><DeliveryType><ZoneEquipment/></DeliveryType><HeatingSourceID IDref="HeatingSource-1"/><CoolingSourceID IDref="CoolingSource-1"/></Delivery></Deliveries></HeatingAndCoolingSystems><LinkedPremises>
+          <HVACSystem ID="HVACSystem-1">
+            <HeatingAndCoolingSystems>
+              <HeatingSources>
+                <HeatingSource ID="HeatingSource-1">
+                  <HeatingSourceType>
+                    <ElectricResistance/>
+                  </HeatingSourceType>
+                </HeatingSource>
+              </HeatingSources>
+              <CoolingSources>
+                <CoolingSource ID="CoolingSource-1">
+                  <CoolingSourceType>
+                    <DX>
+                      <DXSystemType>Packaged terminal air conditioner (PTAC)</DXSystemType>
+                    </DX>
+                  </CoolingSourceType>
+                </CoolingSource>
+              </CoolingSources>
+              <Deliveries>
+                <Delivery ID="Delivery-1">
+                  <DeliveryType>
+                    <ZoneEquipment/>
+                  </DeliveryType>
+                  <HeatingSourceID IDref="HeatingSource-1"/>
+                  <CoolingSourceID IDref="CoolingSource-1"/>
+                </Delivery>
+              </Deliveries>
+            </HeatingAndCoolingSystems>
+            <LinkedPremises>
               <Section>
                 <LinkedSectionID IDref="Section-office">
                   <LinkedScheduleIDs>
@@ -209,7 +237,8 @@
                   </LinkedScheduleIDs>
                 </LinkedSectionID>
               </Section>
-            </LinkedPremises></HVACSystem>
+            </LinkedPremises>
+          </HVACSystem>
         </HVACSystems>
         <LightingSystems>
           <LightingSystem ID="LightingSystem-1">

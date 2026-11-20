@@ -201,7 +201,44 @@
       </Sites>
       <Systems>
         <HVACSystems>
-          <HVACSystem ID="HVACSystem-1"><HeatingAndCoolingSystems><ZoningSystemType>Single zone</ZoningSystemType><HeatingSources><HeatingSource ID="HeatingSource-1"><HeatingSourceType><HeatPump><HeatPumpType>Packaged Unitary</HeatPumpType><HeatPumpBackupSystemFuel>Natural gas</HeatPumpBackupSystemFuel><CoolingSourceID IDref="CoolingSource-1"/></HeatPump></HeatingSourceType></HeatingSource></HeatingSources><CoolingSources><CoolingSource ID="CoolingSource-1"><CoolingSourceType><DX><DXSystemType>Packaged/unitary heat pump</DXSystemType></DX></CoolingSourceType></CoolingSource></CoolingSources><Deliveries><Delivery ID="Delivery-1"><DeliveryType><CentralAirDistribution><AirDeliveryType>Central fan</AirDeliveryType><TerminalUnit>CAV terminal box no reheat</TerminalUnit><ReheatSource>None</ReheatSource></CentralAirDistribution></DeliveryType><HeatingSourceID IDref="HeatingSource-1"/><CoolingSourceID IDref="CoolingSource-1"/></Delivery></Deliveries></HeatingAndCoolingSystems><LinkedPremises>
+          <HVACSystem ID="HVACSystem-1">
+            <HeatingAndCoolingSystems>
+              <ZoningSystemType>Single zone</ZoningSystemType>
+              <HeatingSources>
+                <HeatingSource ID="HeatingSource-1">
+                  <HeatingSourceType>
+                    <HeatPump>
+                      <HeatPumpType>Packaged Unitary</HeatPumpType>
+                      <HeatPumpBackupSystemFuel>Natural gas</HeatPumpBackupSystemFuel>
+                      <CoolingSourceID IDref="CoolingSource-1"/>
+                    </HeatPump>
+                  </HeatingSourceType>
+                </HeatingSource>
+              </HeatingSources>
+              <CoolingSources>
+                <CoolingSource ID="CoolingSource-1">
+                  <CoolingSourceType>
+                    <DX>
+                      <DXSystemType>Packaged/unitary heat pump</DXSystemType>
+                    </DX>
+                  </CoolingSourceType>
+                </CoolingSource>
+              </CoolingSources>
+              <Deliveries>
+                <Delivery ID="Delivery-1">
+                  <DeliveryType>
+                    <CentralAirDistribution>
+                      <AirDeliveryType>Central fan</AirDeliveryType>
+                      <TerminalUnit>CAV terminal box no reheat</TerminalUnit>
+                      <ReheatSource>None</ReheatSource>
+                    </CentralAirDistribution>
+                  </DeliveryType>
+                  <HeatingSourceID IDref="HeatingSource-1"/>
+                  <CoolingSourceID IDref="CoolingSource-1"/>
+                </Delivery>
+              </Deliveries>
+            </HeatingAndCoolingSystems>
+            <LinkedPremises>
               <Section>
                 <LinkedSectionID IDref="Section-office">
                   <LinkedScheduleIDs>
@@ -209,7 +246,8 @@
                   </LinkedScheduleIDs>
                 </LinkedSectionID>
               </Section>
-            </LinkedPremises></HVACSystem>
+            </LinkedPremises>
+          </HVACSystem>
         </HVACSystems>
         <LightingSystems>
           <LightingSystem ID="LightingSystem-1">

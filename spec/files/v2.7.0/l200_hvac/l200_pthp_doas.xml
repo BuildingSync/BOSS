@@ -201,7 +201,73 @@
       </Sites>
       <Systems>
         <HVACSystems>
-          <HVACSystem ID="HVACSystem-1"><HeatingAndCoolingSystems><HeatingSources><HeatingSource ID="HeatingSource-1"><HeatingSourceType><HeatPump><HeatPumpType>Packaged Terminal</HeatPumpType><HeatPumpBackupSystemFuel>Electricity</HeatPumpBackupSystemFuel><CoolingSourceID IDref="CoolingSource-1"/></HeatPump></HeatingSourceType></HeatingSource><HeatingSource ID="HeatingSource-V"><HeatingSourceType><NoHeating/></HeatingSourceType></HeatingSource></HeatingSources><CoolingSources><CoolingSource ID="CoolingSource-1"><CoolingSourceType><DX><DXSystemType>Packaged terminal heat pump (PTHP)</DXSystemType></DX></CoolingSourceType></CoolingSource><CoolingSource ID="CoolingSource-V"><CoolingSourceType><NoCooling/></CoolingSourceType></CoolingSource></CoolingSources><Deliveries><Delivery ID="Delivery-1"><DeliveryType><ZoneEquipment/></DeliveryType><HeatingSourceID IDref="HeatingSource-1"/><CoolingSourceID IDref="CoolingSource-1"/></Delivery><Delivery ID="Delivery-V"><DeliveryType><CentralAirDistribution><AirDeliveryType>Central fan</AirDeliveryType><TerminalUnit>CAV terminal box no reheat</TerminalUnit><ReheatSource>None</ReheatSource></CentralAirDistribution></DeliveryType><HeatingSourceID IDref="HeatingSource-V"/><CoolingSourceID IDref="CoolingSource-V"/></Delivery></Deliveries></HeatingAndCoolingSystems><OtherHVACSystems><OtherHVACSystem ID="OtherHVACSystem-1"><OtherHVACType><MechanicalVentilation><VentilationType>Dedicated outdoor air system</VentilationType></MechanicalVentilation></OtherHVACType><Integration>Stand-alone</Integration><LinkedDeliveryIDs><LinkedDeliveryID IDref="Delivery-V"/></LinkedDeliveryIDs></OtherHVACSystem></OtherHVACSystems><LinkedPremises>
+          <HVACSystem ID="HVACSystem-1">
+            <HeatingAndCoolingSystems>
+              <HeatingSources>
+                <HeatingSource ID="HeatingSource-1">
+                  <HeatingSourceType>
+                    <HeatPump>
+                      <HeatPumpType>Packaged Terminal</HeatPumpType>
+                      <HeatPumpBackupSystemFuel>Electricity</HeatPumpBackupSystemFuel>
+                      <CoolingSourceID IDref="CoolingSource-1"/>
+                    </HeatPump>
+                  </HeatingSourceType>
+                </HeatingSource>
+                <HeatingSource ID="HeatingSource-V">
+                  <HeatingSourceType>
+                    <NoHeating/>
+                  </HeatingSourceType>
+                </HeatingSource>
+              </HeatingSources>
+              <CoolingSources>
+                <CoolingSource ID="CoolingSource-1">
+                  <CoolingSourceType>
+                    <DX>
+                      <DXSystemType>Packaged terminal heat pump (PTHP)</DXSystemType>
+                    </DX>
+                  </CoolingSourceType>
+                </CoolingSource>
+                <CoolingSource ID="CoolingSource-V">
+                  <CoolingSourceType>
+                    <NoCooling/>
+                  </CoolingSourceType>
+                </CoolingSource>
+              </CoolingSources>
+              <Deliveries>
+                <Delivery ID="Delivery-1">
+                  <DeliveryType>
+                    <ZoneEquipment/>
+                  </DeliveryType>
+                  <HeatingSourceID IDref="HeatingSource-1"/>
+                  <CoolingSourceID IDref="CoolingSource-1"/>
+                </Delivery>
+                <Delivery ID="Delivery-V">
+                  <DeliveryType>
+                    <CentralAirDistribution>
+                      <AirDeliveryType>Central fan</AirDeliveryType>
+                      <TerminalUnit>CAV terminal box no reheat</TerminalUnit>
+                      <ReheatSource>None</ReheatSource>
+                    </CentralAirDistribution>
+                  </DeliveryType>
+                  <HeatingSourceID IDref="HeatingSource-V"/>
+                  <CoolingSourceID IDref="CoolingSource-V"/>
+                </Delivery>
+              </Deliveries>
+            </HeatingAndCoolingSystems>
+            <OtherHVACSystems>
+              <OtherHVACSystem ID="OtherHVACSystem-1">
+                <OtherHVACType>
+                  <MechanicalVentilation>
+                    <VentilationType>Dedicated outdoor air system</VentilationType>
+                  </MechanicalVentilation>
+                </OtherHVACType>
+                <Integration>Stand-alone</Integration>
+                <LinkedDeliveryIDs>
+                  <LinkedDeliveryID IDref="Delivery-V"/>
+                </LinkedDeliveryIDs>
+              </OtherHVACSystem>
+            </OtherHVACSystems>
+            <LinkedPremises>
               <Section>
                 <LinkedSectionID IDref="Section-office">
                   <LinkedScheduleIDs>
@@ -209,7 +275,8 @@
                   </LinkedScheduleIDs>
                 </LinkedSectionID>
               </Section>
-            </LinkedPremises></HVACSystem>
+            </LinkedPremises>
+          </HVACSystem>
         </HVACSystems>
         <LightingSystems>
           <LightingSystem ID="LightingSystem-1">
