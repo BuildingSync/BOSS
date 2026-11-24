@@ -1,0 +1,15 @@
+flowchart TD
+  P{"Plan kind"} -- topology --> T1["create_typical_building_from_model<br/>add_hvac = false"]
+  T1 --> T2["OSWArgPopulator.append_step for each planned step<br/>set_step_argument per step (no name collision)"]
+  T2 --> T3["Steps in order: conditioning → ventilation → sizing<br/>measure_paths include scenario_only repos<br/>buildingsync-measures-gem via local_path<br/>../../buildingsync-measures-gem"]
+  P -- fallback --> F1["create_typical_building_from_model<br/>add_hvac = true"]
+  F1 --> F2["Log warning per reason:<br/>'Keeping create_typical_building_from_model HVAC: …'"]
+  F2 --> F3["measure_paths exclude scenario_only repos<br/>(sibling checkout not required)"]
+  T3 --> W["Write baseline/in.osw"]
+  F3 --> W
+  W --> R["Boss.run_baseline_osw → OpenStudio"]
+  R --> C["Integration check (shard 0, non-smoke):<br/>Success, add_hvac=false, PSZ-HP loops with NaturalGas<br/>supplemental heat for template, sizing Success"]
+  subgraph CI["CI (.github/workflows/ci.yml)"]
+    C1["Checkout BOSS into BOSS/"] --> C2["Checkout buildingsync-measures-gem<br/>at BSYNC_MEASURES_REF"]
+  end
+  C2 -.-> T3

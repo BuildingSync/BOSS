@@ -1,0 +1,21 @@
+flowchart TD
+  IN(["BaselineHvacPlanner.plan(hvac_systems, template,<br/>exclude_system_ids = proposed systems)"]) --> NOSYS{"HVACSystems present?"}
+  NOSYS -- no --> FB
+  NOSYS -- yes --> TPL{"Template supported?<br/>DOE Ref Pre-1980, DOE Ref 1980-2004,<br/>90.1-2004 … 90.1-2019"}
+  TPL -- no --> FB
+  TPL -- yes --> SELECT["Run HvacTopologySelector"]
+  SELECT --> PROP["Drop results of proposed systems<br/>(named by a Measure's AlternativeSystemReplacement<br/>or ModifiedSystem; computed in boss.rb)"]
+  PROP --> ANY{"Any results left?"}
+  ANY -- no --> FB
+  ANY -- yes --> ALL{"Every result is match?<br/>(any other status falls back,<br/>including integrated and no_hvac)"}
+  ALL -- no --> FB
+  ALL -- yes --> GROUP["Group by (measure, measure_arguments);<br/>merge premises; split into<br/>conditioning and ventilation"]
+  GROUP --> CFG{"Configuration checks (all reasons reported together):<br/>exactly 1 conditioning; at most 1 ventilation;<br/>if ventilation, conditioning is zone equipment<br/>(ptac, pthp, four_pipe_fan_coil, vrf)"}
+  CFG -- "any fails" --> FB
+  CFG -- pass --> NORM["normalize_premises: Section links covering the building<br/>(Whole building, or all non-empty sections) → Building"]
+  NORM --> BIND["HvacTargetBinder.bind<br/>conditioning: given operation (create/replace)<br/>ventilation: always create"]
+  BIND --> OK{"All bindings bound?"}
+  OK -- no --> FB
+  OK -- yes --> SIZE["Steps: conditioning → ventilation →<br/>apply_standard_hvac_sizing_and_efficiency(template)"]
+  SIZE --> TOPO(["Plan :topology with steps"])
+  FB(["Plan :fallback with reason messages"])

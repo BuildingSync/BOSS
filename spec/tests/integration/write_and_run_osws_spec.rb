@@ -19,15 +19,15 @@ test_configs = [
   ['BuildingEQ-1.0.0.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['Chula_Vista_ASHRAE_L1_Example_Building.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['Demo_ASHRAE_L2_Example_Building.xml', ASHRAE90_1, nil, 'v2.7.0'],
-  ['Example_ASHRAE_L2_Report_-_with_Energy_Use_Data_2.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['Example_ASHRAE_L2_Report_-_with_Energy_Use_Data.xml', ASHRAE90_1, nil, 'v2.7.0'],
+  # ['Example_ASHRAE_L2_Report_-_with_Energy_Use_Data_2.xml', ASHRAE90_1, nil, 'v2.7.0'], # same building as above with renumbered IDs
   ['Example_ASHRAE_L2_Report.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['Example_HOMES_Template_Building.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['Example_NYC_Energy_Efficiency_Report_Property_2.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['Example_San_Francisco_Audit_Report.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['example-smalloffice-level1.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['Golden Test File.xml', ASHRAE90_1, nil, 'v2.7.0'],
-  ['L100_Audit-1.0.0_and_BSyncr-1.0.0.xml', ASHRAE90_1, nil, 'v2.7.0'],
+  # ['L100_Audit-1.0.0_and_BSyncr-1.0.0.xml', ASHRAE90_1, nil, 'v2.7.0'], # L100_Audit-1.0.0.xml plus latitude/longitude
   ['L100_Audit-1.0.0.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['L100_Pre-Simulation-1.0.0.xml', ASHRAE90_1, nil, 'v2.7.0'],
   ['NYC_BBL_AT_Demo_Property.xml', ASHRAE90_1, nil, 'v2.7.0'],
@@ -38,16 +38,36 @@ test_configs = [
 SMOKE_FILES = ['building_151.xml', 'example-smalloffice-level1.xml'].freeze
 test_configs = test_configs.select { |config| SMOKE_FILES.include?(config[0]) } if ENV['BOSS_SMOKE'] == '1'
 
+# L200 topology baselines: file_name (under spec/files/v2.7.0) => expected topology measures in step order.
+# The l200_hvac files come from spec/files/v2.7.0/l200_hvac/generate.rb; all use template 90.1-2013.
+topology_configs = {
+  'example-smalloffice-level2.xml' => [['hvac_packaged_rooftop_heat_pump'], 'DOE Ref 1980-2004'],
+  'example-smalloffice-level2-built-2012.xml' => [['hvac_packaged_rooftop_heat_pump'], '90.1-2013'],
+  'l200_hvac/l200_ptac.xml' => [['hvac_ptac'], '90.1-2013'],
+  'l200_hvac/l200_pthp.xml' => [['hvac_pthp'], '90.1-2013'],
+  'l200_hvac/l200_rtu_ac.xml' => [['hvac_packaged_rooftop_ac'], '90.1-2013'],
+  'l200_hvac/l200_rtu_hp_electric_backup.xml' => [['hvac_packaged_rooftop_heat_pump'], '90.1-2013'],
+  'l200_hvac/l200_rtu_hp_gas_backup.xml' => [['hvac_packaged_rooftop_heat_pump'], '90.1-2013'],
+  'l200_hvac/l200_warm_air_furnace.xml' => [['hvac_warm_air_furnace'], '90.1-2013'],
+  'l200_hvac/l200_packaged_vav_hw_reheat.xml' => [['hvac_packaged_rooftop_vav_hw_reheat'], '90.1-2013'],
+  'l200_hvac/l200_vav_hw_reheat.xml' => [['hvac_vav_hw_reheat'], '90.1-2013'],
+  'l200_hvac/l200_four_pipe_fan_coil.xml' => [['hvac_four_pipe_fan_coil'], '90.1-2013'],
+  'l200_hvac/l200_vrf.xml' => [['hvac_vrf'], '90.1-2013'],
+  'l200_hvac/l200_ptac_ventilation_only.xml' => [['hvac_ptac', 'hvac_ventilation_only'], '90.1-2013'],
+  'l200_hvac/l200_pthp_doas.xml' => [['hvac_pthp', 'hvac_doas'], '90.1-2013'],
+  'l200_hvac/l200_four_pipe_fan_coil_doas.xml' => [['hvac_four_pipe_fan_coil', 'hvac_doas'], '90.1-2013'],
+  'l200_hvac/l200_vrf_doas.xml' => [['hvac_vrf', 'hvac_doas'], '90.1-2013']
+}
+topology_configs = {} if ENV['BOSS_SMOKE'] == '1'
+
 # BOSS_SHARD / BOSS_SHARDS split the fixtures across parallel CI jobs.
-run_extra_examples = ENV['BOSS_SMOKE'] != '1'
 if ENV['BOSS_SHARDS']
   shards = Integer(ENV['BOSS_SHARDS'])
   shard = Integer(ENV.fetch('BOSS_SHARD', '0'))
   raise ArgumentError, "BOSS_SHARD must be in 0...#{shards}" if shards < 1 || shard.negative? || shard >= shards
 
   test_configs = test_configs.select.with_index { |_config, index| index % shards == shard }
-  # Examples outside test_configs run once, in shard 0.
-  run_extra_examples &&= shard.zero?
+  topology_configs = topology_configs.select.with_index { |_config, index| index % shards == shard }
 end
 
 RSpec.describe 'BOSS' do
@@ -80,28 +100,29 @@ RSpec.describe 'BOSS' do
 
     end
 
-    next unless run_extra_examples
-
-    {
-      'example-smalloffice-level2.xml' => ['smalloffice_l2_topology_doe_ref', 'DOE Ref 1980-2004'],
-      'example-smalloffice-level2-built-2012.xml' => ['smalloffice_l2_topology', '90.1-2013']
-    }.each do |file_name, (output_name, template)|
+    topology_configs.each do |file_name, (measures, template)|
       it "write and run a topology HVAC baseline. File: #{file_name}, Template: #{template}" do
         xml_path = File.join(SPEC_FILES_DIR, 'v2.7.0', file_name)
-        output_path = File.join(SPEC_OUTPUT_DIR, 'v2.7.0', 'write_and_run_baseline_osw', output_name)
+        output_path = File.join(SPEC_OUTPUT_DIR, 'v2.7.0', 'write_and_run_baseline_osw',
+                                "topology_#{File.basename(file_name, '.xml')}")
 
         BOSS::Boss.write_baseline_osw(xml_path, output_path, nil, ASHRAE90_1)
         BOSS::Boss.run_baseline_osw(output_path)
 
         out_osw = JSON.parse(File.read(File.join(output_path, 'baseline', 'out.osw')), symbolize_names: true)
         expect(out_osw[:completed_status]).to eq 'Success'
-        steps = out_osw[:steps].to_h { |step| [step[:measure_dir_name], step] }
-        expect(steps['create_typical_building_from_model'][:arguments][:add_hvac]).to be false
-        topology = steps['apply_hvac_topology_to_zone_scope']
-        expect(topology[:result][:step_result]).to eq 'Success'
-        expect(topology[:result][:step_final_condition])
-          .to match(/Created \d+ PSZ-HP loops \(NaturalGas supplemental heat\).*#{Regexp.escape(template)}/)
-        expect(steps['apply_standard_hvac_sizing_and_efficiency'][:result][:step_result]).to eq 'Success'
+        steps = out_osw[:steps]
+        typical = steps.find { |step| step[:measure_dir_name] == 'create_typical_building_from_model' }
+        expect(typical[:arguments][:add_hvac]).to be false
+        topology = steps.select { |step| step[:measure_dir_name] == 'apply_hvac_topology_to_zone_scope' }
+        expect(topology.map { |step| step[:arguments][:topology_measure] }).to eq(measures)
+        topology.each { |step| expect(step[:result][:step_result]).to eq 'Success' }
+        if file_name.start_with?('example-smalloffice-level2')
+          expect(topology.first[:result][:step_final_condition])
+            .to match(/Created \d+ PSZ-HP loops \(NaturalGas supplemental heat\).*#{Regexp.escape(template)}/)
+        end
+        sizing = steps.find { |step| step[:measure_dir_name] == 'apply_standard_hvac_sizing_and_efficiency' }
+        expect(sizing[:result][:step_result]).to eq 'Success'
       end
     end
 

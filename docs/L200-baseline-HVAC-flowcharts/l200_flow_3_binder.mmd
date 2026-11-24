@@ -1,0 +1,13 @@
+flowchart TD
+  IN(["HvacTargetBinder.bind(result, operation, standards_template, zone_names)"]) --> T{"Result is match?<br/>(operation and template already<br/>validated by the planner)"}
+  T -- no --> MI["Return the result's status and messages"]
+  T -- yes --> Z{"zone_names given?"}
+  Z -- yes --> EX["zone_scope = explicit_zone_names"]
+  Z -- no --> WB{"Premises present and all Building / Site / Facility?<br/>(generated geometry has no BuildingSync zone IDs)"}
+  WB -- no --> MI2["missing_input: only whole-building<br/>premises can bind"]
+  MI2 --> FB
+  WB -- yes --> ALLZ["zone_scope = all_model_zones"]
+  EX --> STEP
+  ALLZ --> STEP["Step apply_hvac_topology_to_zone_scope:<br/>topology_measure, operation (create/replace),<br/>zone_scope, standards_template,<br/>topology_arguments_json (only if measure arguments)"]
+  STEP --> OUT(["Step → Planner"])
+  MI --> FB(["Planner falls back"])
