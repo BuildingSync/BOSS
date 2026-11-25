@@ -453,10 +453,14 @@ module BOSS
     ].freeze
 
     NOT_MAPPABLE_OTHER = {
-      'Heat recovery ventilator' => 'Heat-recovery / energy-recovery ventilation',
-      'Energy recovery ventilator' => 'Heat-recovery / energy-recovery ventilation',
       'Exhaust only' => 'Exhaust-only / spot exhaust'
     }.freeze
+
+    # Exhaust-air recovery added by ComStock to existing outdoor-air loops (no arguments).
+    RECOVERY_TYPES = ['Heat recovery ventilator', 'Energy recovery ventilator'].freeze
+    RECOVERY_CONFIGURATION = 'Exhaust air heat / energy recovery'
+    RECOVERY_MEASURE = 'upgrade_hvac_exhaust_air_energy_or_heat_recovery'
+    RECOVERY_INTEGRATION = 'Integrated with central air distribution'
 
     OTHER_EQUIPMENT_NOT_MAPPABLE = {
       'SpotExhaust' => 'Exhaust-only / spot exhaust',
@@ -516,10 +520,44 @@ module BOSS
         end
       end
 
-      results = deliveries.reject { |d| ventilation_links.key?(d.attributes['ID']) }.map do |delivery|
-        _select_delivery(sys, delivery, index)
+      folded = _economizer_folds(deliveries)
+      results = deliveries.reject { |d| ventilation_links.key?(d.attributes['ID']) || folded.key?(d.attributes['ID']) }
+                          .map { |delivery| _select_delivery(sys, delivery, index) }
+      results + others.map { |other| _select_other(sys, other, index, ventilation_links, folded) }
+    end
+
+    ECONOMIZER_ONLY_CHILDREN = ['AirSideEconomizer', 'SupplyAirTemperatureResetControl', 'StaticPressureResetControl'].freeze
+
+    # A zone-equipment delivery whose only content is fan-based economizer/reset controls and
+    # whose heating and cooling sources equal those of exactly one central-fan delivery describes
+    # that central delivery's controls, not separate equipment.
+    # @return [Hash{String => String}] folded delivery ID => central delivery ID
+    def _economizer_folds(deliveries)
+      sources = ->(d) { ['HeatingSourceID', 'CoolingSourceID'].map { |p| Context.nodes(d, p).map { |n| n.attributes['IDref'] }.sort } }
+      centrals = deliveries.select do |d|
+        Context.texts(d, 'DeliveryType/CentralAirDistribution/AirDeliveryType') == ['Central fan']
       end
-      results + others.map { |other| _select_other(sys, other, index, ventilation_links) }
+      deliveries.each_with_object({}) do |delivery, folds|
+        next unless _economizer_only?(delivery)
+
+        key = sources.call(delivery)
+        next if key.any?(&:empty?)
+
+        hosts = centrals.select { |c| sources.call(c) == key }
+        folds[delivery.attributes['ID']] = hosts.first.attributes['ID'] if hosts.length == 1
+      end
+    end
+
+    def _economizer_only?(delivery)
+      return false unless (delivery.elements.to_a.map(&:name) - ['DeliveryType', 'HeatingSourceID', 'CoolingSourceID']).empty?
+
+      type = Context.nodes(delivery, 'DeliveryType').first
+      zone = type && Context.nodes(type, 'ZoneEquipment').first
+      fan = zone && Context.nodes(zone, 'FanBased').first
+      return false if fan.nil? || type.elements.to_a.length != 1 || zone.elements.to_a.length != 1
+
+      names = fan.elements.to_a.map(&:name)
+      names.include?('AirSideEconomizer') && (names - ECONOMIZER_ONLY_CHILDREN).empty?
     end
 
     # A record whose only content is MechanicalVentilation with VentilationType None or no type
@@ -539,6 +577,74 @@ module BOSS
       !texts.empty? && texts.all? { |t| INTEGRATED.include?(t) }
     end
 
+    def _recovery?(sys, other, index)
+      x = Context.new(sys, other, index)
+      !(Context.texts(x.mv(other), 'VentilationType') & RECOVERY_TYPES).empty?
+    end
+
+    # Recovery is modeled on the linked deliveries' existing air loops, so the linked
+    # deliveries must be central air and stay selected as conditioning deliveries.
+    def _select_recovery(sys, other, index, linked_ids, premises, folded)
+      sys_id = sys.attributes['ID']
+      linked_ids = linked_ids.map { |id| folded.fetch(id, id) }.uniq
+      ids = [other.attributes['ID']] + linked_ids
+      messages = []
+      integration = Context.texts(other, 'Integration')
+      if integration.empty?
+        central = !linked_ids.empty? && linked_ids.all? do |id|
+          delivery = index[:delivery][id]
+          delivery && !Context.nodes(delivery, 'DeliveryType/CentralAirDistribution').empty?
+        end
+        unless central
+          return _result(:missing_input, sys_id, ids, premises, nil,
+                         ['Recovery ventilation requires Integration to identify the air system it serves.'],
+                         configuration: RECOVERY_CONFIGURATION)
+        end
+
+        integration = [RECOVERY_INTEGRATION]
+        messages << "Integration inferred as '#{RECOVERY_INTEGRATION}' because every linked delivery is central air."
+      end
+      if integration != [RECOVERY_INTEGRATION]
+        return _result(:not_mappable, sys_id, ids, premises, nil,
+                       ["Recovery with Integration '#{integration.join(', ')}' is not supported; " \
+                        "only '#{RECOVERY_INTEGRATION}'."],
+                       configuration: RECOVERY_CONFIGURATION)
+      end
+      if linked_ids.empty?
+        return _result(:missing_input, sys_id, ids, premises, nil, ['Missing LinkedDeliveryIDs.'],
+                       configuration: RECOVERY_CONFIGURATION)
+      end
+
+      recovery_links = Context.nodes(sys, 'OtherHVACSystems/OtherHVACSystem')
+                              .select { |o| _recovery?(sys, o, index) }
+                              .flat_map do |o|
+                                Context.nodes(o, 'LinkedDeliveryIDs/LinkedDeliveryID')
+                                       .map { |l| folded.fetch(l.attributes['IDref'], l.attributes['IDref']) }.uniq
+                              end
+      conflicts = linked_ids.reject { |id| index[:delivery].key?(id) }
+                            .map { |id| "LinkedDeliveryID '#{id}' does not resolve to a Delivery" }
+      conflicts += linked_ids.select { |id| recovery_links.count(id) > 1 }.uniq
+                             .map { |id| "Delivery '#{id}' is linked more than once by recovery records" }
+      return _result(:conflicting_input, sys_id, ids, premises, nil, conflicts, configuration: RECOVERY_CONFIGURATION) unless conflicts.empty?
+
+      contexts = linked_ids.map { |id| Context.new(sys, index[:delivery][id], index) }
+      x_probe = Context.new(sys, other, index)
+      mv = x_probe.mv(other)
+      failures = contexts.reject { |x| x.exists(x.d, 'DeliveryType/CentralAirDistribution') }
+                         .map { |x| "Delivery '#{x.d.attributes['ID']}' must be central air distribution" }
+      failures += ['MakeupAirSourceID', 'VentilationControlMethods', 'VentilationZoneControl']
+                  .select { |p| x_probe.exists(mv, p) }.map { |p| "MV/#{p} must be absent" }
+      failures << 'Guard failed: MV/DemandControlVentilation' unless x_probe.guard(mv, 'DemandControlVentilation', ['false', '0'])
+      failures << 'Guard failed: O/PrimaryFuel' unless x_probe.guard(other, 'PrimaryFuel', ELECTRIC)
+      return _result(:conflicting_input, sys_id, ids, premises, nil, failures, configuration: RECOVERY_CONFIGURATION) unless failures.empty?
+
+      # ComStock takes no arguments; ventilation_type tells the planner whether to override
+      # ComStock's climate-zone HRV/ERV choice.
+      _result(:match, sys_id, ids, premises, [:recovery, other.attributes['ID']], messages,
+              configuration: RECOVERY_CONFIGURATION, measure: RECOVERY_MEASURE,
+              measure_arguments: { 'ventilation_type' => (Context.texts(mv, 'VentilationType') & RECOVERY_TYPES).first })
+    end
+
     def _explicit_no_hvac?(x)
       !x.d.nil? && x.exists(x.h, 'NoHeating') && x.exists(x.c, 'NoCooling') && x.absent(x.d, 'DeliveryType')
     end
@@ -546,7 +652,7 @@ module BOSS
     # Ventilation annotations own their linked deliveries only when every one is explicitly
     # unconditioned; otherwise those deliveries are still evaluated as conditioning deliveries.
     def _consumes_deliveries?(sys, other, index)
-      return false if _integrated?(other)
+      return false if _integrated?(other) || _recovery?(sys, other, index)
       return true unless _ventilation_annotation?(other)
 
       ids = Context.nodes(other, 'LinkedDeliveryIDs/LinkedDeliveryID').map { |l| l.attributes['IDref'] }
@@ -628,7 +734,7 @@ module BOSS
               measure_arguments: rule[:arguments] ? rule[:arguments].call(x) : {})
     end
 
-    def _select_other(sys, other, index, ventilation_links)
+    def _select_other(sys, other, index, ventilation_links, folded = {})
       sys_id = sys.attributes['ID']
       other_id = other.attributes['ID']
       linked_ids = Context.nodes(other, 'LinkedDeliveryIDs/LinkedDeliveryID').map { |l| l.attributes['IDref'] }
@@ -655,6 +761,8 @@ module BOSS
       end
 
       ventilation_type = ventilation_type.first
+      return _select_recovery(sys, other, index, linked_ids, premises, folded) if RECOVERY_TYPES.include?(ventilation_type)
+
       if NOT_MAPPABLE_OTHER.key?(ventilation_type)
         configuration = NOT_MAPPABLE_OTHER[ventilation_type]
         return _result(:not_mappable, sys_id, ids, premises, nil,
