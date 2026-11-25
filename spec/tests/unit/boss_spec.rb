@@ -129,7 +129,7 @@ RSpec.describe BOSS::Boss do
 
           expect(osw_path).to eq File.join(output_dir, 'baseline', 'in.osw')
           expect(Dir.children(output_dir)).to eq ['baseline']
-          expect(Dir.children(File.join(output_dir, 'baseline'))).to eq ['in.osw']
+          expect(Dir.children(File.join(output_dir, 'baseline')).sort).to eq ['hvac_mapping_report.json', 'in.osw']
 
           osw = JSON.parse(File.read(osw_path), symbolize_names: true)
           expect(osw[:steps]).to eq send(expected_steps)
@@ -175,7 +175,10 @@ RSpec.describe BOSS::Boss do
     it 'is private while the public API stays public' do
       expect(described_class.private_methods).to include(:build_baseline_osw)
       expect(described_class.public_methods).to include(:write_baseline_osw, :run_baseline_osw)
-      expect(described_class.method(:write_baseline_osw).arity).to eq 4
+      expect(described_class.method(:write_baseline_osw).parameters).to eq [
+        [:req, :xml_file_path], [:req, :output_dir], [:req, :epw_file_path], [:req, :standard_to_be_used],
+        [:key, :require_l200]
+      ]
       expect(described_class.method(:run_baseline_osw).arity).to eq 1
     end
 
