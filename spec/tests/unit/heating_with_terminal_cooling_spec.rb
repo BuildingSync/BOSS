@@ -65,6 +65,74 @@ RSpec.describe 'Central furnace with cooling-only PTAC' do
     expect(result.messages).to include('Guard failed: A/AirDeliveryType')
   end
 
+  describe 'baseboard and hot-water coil variants' do
+    def child(parent, name, text = nil, attrs = {})
+      el = parent.add_element("auc:#{name}", attrs)
+      el.text = text if text
+      el
+    end
+
+    # Replaces the furnace with a hot-water boiler plant (fuel given) or electric resistance (fuel nil).
+    def swap_heating(systems, fuel)
+      source = element(systems, 'HeatingSource-44989520')
+      type = source.elements['*[local-name()="HeatingSourceType"]']
+      type.elements.delete_all('*')
+      medium = source.elements['*[local-name()="HeatingMedium"]']
+      if fuel
+        child(type, 'SourceHeatingPlantID', nil, 'IDref' => 'HeatingPlant-1')
+        medium.text = 'Hot water'
+        source.elements['*[local-name()="PrimaryFuel"]'].text = fuel
+        sys = element(systems, 'HVACSystemType-44989360')
+        plant = child(child(child(REXML::Element.new('auc:Plants'), 'HeatingPlants'), 'HeatingPlant', nil, 'ID' => 'HeatingPlant-1'), 'Boiler')
+        child(plant, 'BoilerType', 'Hot water')
+        child(plant.parent, 'PrimaryFuel', fuel)
+        sys.insert_before(sys.elements['*[local-name()="HeatingAndCoolingSystems"]'], plant.parent.parent.parent)
+      else
+        child(type, 'ElectricResistance')
+        source.elements['*[local-name()="PrimaryFuel"]'].text = 'Electricity'
+      end
+    end
+
+    def baseboard_delivery(systems)
+      type = element(systems, 'Delivery-44989380').elements['*[local-name()="DeliveryType"]']
+      type.elements.delete_all('*')
+      child(child(child(type, 'ZoneEquipment'), 'Convection'), 'ConvectionType', 'Perimeter baseboard')
+    end
+
+    it 'maps hot water baseboard with cooling-only PTAC' do
+      systems = hvac_systems(l200_path)
+      swap_heating(systems, 'Fuel oil no 2')
+      baseboard_delivery(systems)
+      result = select(systems).first
+      expect([result.status, result.configuration]).to eq [:match, 'Hot water baseboard with cooling-only PTAC']
+      expect(result.measure_arguments).to eq('heating_source' => 'hot_water_baseboard', 'boiler_fuel' => 'FuelOilNo2')
+      expect(result.record_ids).to include('HeatingPlant-1')
+    end
+
+    it 'maps electric baseboard with cooling-only PTAC' do
+      systems = hvac_systems(l200_path)
+      swap_heating(systems, nil)
+      baseboard_delivery(systems)
+      result = select(systems).first
+      expect([result.status, result.configuration]).to eq [:match, 'Electric baseboard with cooling-only PTAC']
+      expect(result.measure_arguments).to eq('heating_source' => 'electric_baseboard')
+    end
+
+    it 'maps a PTAC with a hot water coil' do
+      systems = hvac_systems(l200_path)
+      swap_heating(systems, 'Natural gas')
+      element(systems, 'Delivery-44989380').parent.delete_element(element(systems, 'Delivery-44989380'))
+      cooling = element(systems, 'Delivery-44989400')
+      cooling.insert_before(cooling.elements['*[local-name()="CoolingSourceID"]'],
+                            REXML::Element.new('auc:HeatingSourceID').tap { |e| e.add_attribute('IDref', 'HeatingSource-44989520') })
+      links = element(systems, 'OtherHVACSystemType-44989440').elements['*[local-name()="LinkedDeliveryIDs"]']
+      links.delete_element(links.elements['*[@IDref="Delivery-44989380"]'])
+      results = select(systems).select { |r| r.status == :match }
+      expect(results.map(&:configuration)).to eq ['PTAC with hot water coil']
+      expect(results.first.measure_arguments).to eq('heating_source' => 'hot_water_ptac_coil', 'boiler_fuel' => 'NaturalGas')
+    end
+  end
+
   describe 'BOSS::Boss.write_baseline_osw' do
     it 'writes the topology steps and a mapping report' do
       Dir.mktmpdir do |dir|

@@ -169,6 +169,18 @@ module BOSS
         nodes(el, 'FanBased/FanBasedDistributionType').any? { |n| !n.elements.to_a.empty? }
       end
 
+      # @return [String, nil] boiler_fuel argument when the source is fed by a hot-water boiler plant
+      def hot_water_boiler_fuel
+        return nil if hp.nil? || !eq(hp, 'Boiler/BoilerType', 'Hot water') || !guard(hs, 'HeatingMedium', 'Hot water')
+
+        fuels = self.class.texts(hp, 'PrimaryFuel')
+        fuels.length == 1 ? BOILER_FUELS[fuels.first] : nil
+      end
+
+      def ptac_cooling
+        eq(dx, 'DXSystemType', 'Packaged terminal air conditioner (PTAC)') && packaged_air_cooled_dx
+      end
+
       def gas_air_furnace
         exists(h, 'Furnace') && eq(hs, 'PrimaryFuel', 'Natural gas') && eq(hs, 'HeatingMedium', 'Air')
       end
@@ -190,6 +202,9 @@ module BOSS
     end
 
     ELECTRIC = 'Electricity'
+    # BuildingSync PrimaryFuel => hvac_heating_with_terminal_cooling boiler_fuel
+    BOILER_FUELS = { 'Natural gas' => 'NaturalGas', 'Electricity' => 'Electricity',
+                     'Fuel oil no 2' => 'FuelOilNo2', 'Propane' => 'Propane' }.freeze
     AIR_REFRIGERANT = ['Air', 'Refrigerant'].freeze
     FURNACE_TYPES = ['Warm air', 'Other'].freeze
     # HeatPumpBackupSystemFuel => hvac_packaged_rooftop_heat_pump supplemental_heating_fuel
@@ -211,6 +226,20 @@ module BOSS
             ['CS/PrimaryFuel', x.guard(x.cs, 'PrimaryFuel', ELECTRIC)],
             ['HS/HeatingMedium', x.guard(x.hs, 'HeatingMedium', 'Air')],
             ['CS/CoolingMedium', x.guard(x.cs, 'CoolingMedium', AIR_REFRIGERANT)]
+          ]
+        }
+      },
+      {
+        configuration: 'PTAC with hot water coil', measure: 'hvac_heating_with_terminal_cooling', status: :match,
+        group: :delivery,
+        required: ->(x) { x.zone_equipment_only && x.ptac_cooling && !x.hot_water_boiler_fuel.nil? },
+        arguments: ->(x) { { 'heating_source' => 'hot_water_ptac_coil', 'boiler_fuel' => x.hot_water_boiler_fuel } },
+        absent: ->(x) { x.fan_based_distribution(x.z) ? ['Z/FanBased/FanBasedDistributionType'] : [] },
+        guards: lambda { |x|
+          [
+            ['CS/PrimaryFuel', x.guard(x.cs, 'PrimaryFuel', ELECTRIC)],
+            ['CS/CoolingMedium', x.guard(x.cs, 'CoolingMedium', AIR_REFRIGERANT)],
+            ['plant quantities', x.plant_quantities_one(x.hp)]
           ]
         }
       },
@@ -483,8 +512,12 @@ module BOSS
       failed
     end
 
-    TERMINAL_COOLING_CONFIGURATION = 'Central furnace with cooling-only PTAC'
     TERMINAL_COOLING_MEASURE = 'hvac_heating_with_terminal_cooling'
+    TERMINAL_COOLING_CONFIGURATIONS = {
+      'central_gas_furnace' => 'Central furnace with cooling-only PTAC',
+      'hot_water_baseboard' => 'Hot water baseboard with cooling-only PTAC',
+      'electric_baseboard' => 'Electric baseboard with cooling-only PTAC'
+    }.freeze
 
     # @param hvac_systems [REXML::Element] an HVACSystems element (or any parent of HVACSystem elements)
     # @return [Array<Result>]
@@ -540,53 +573,71 @@ module BOSS
       [pair].compact + results + others.map { |other| _select_other(sys, other, index, ventilation_links, folded) }
     end
 
-    # A heating-only central-air delivery from a gas furnace plus a cooling-only zone-equipment
-    # delivery from PTACs, in the same HVACSystem and premises, is one central-heating,
-    # terminal-cooling configuration.
+    # The heating_with_terminal_cooling variant of a heating-only delivery, or nil.
+    def _separate_heating_variant(x)
+      return nil if x.hs.nil? || !x.ref_ids(x.d, 'CoolingSourceID').empty?
+      return 'central_gas_furnace' if !x.a.nil? && x.gas_air_furnace
+      return nil unless x.eq(x.z, 'Convection/ConvectionType', 'Perimeter baseboard')
+      return 'electric_baseboard' if x.exists(x.h, 'ElectricResistance')
+
+      'hot_water_baseboard' unless x.hot_water_boiler_fuel.nil?
+    end
+
+    # A heating-only delivery (central gas furnace, or hot-water or electric perimeter baseboard)
+    # plus a cooling-only zone-equipment delivery from PTACs, in the same HVACSystem and premises,
+    # is one heating_with_terminal_cooling configuration.
     # @return [Array(Result, Array<String>), nil] the result and the delivery IDs it covers
     def _heating_with_terminal_cooling(sys, deliveries, index)
       contexts = deliveries.map { |d| Context.new(sys, d, index) }
       return nil unless contexts.all? { |x| x.conflicts.empty? }
 
-      heating = contexts.select do |x|
-        !x.hs.nil? && x.ref_ids(x.d, 'CoolingSourceID').empty? && !x.a.nil? && x.gas_air_furnace
-      end
+      heating = contexts.filter_map { |x| (variant = _separate_heating_variant(x)) && [x, variant] }
       cooling = contexts.select do |x|
-        !x.cs.nil? && x.ref_ids(x.d, 'HeatingSourceID').empty? && x.zone_equipment_only &&
-          x.eq(x.dx, 'DXSystemType', 'Packaged terminal air conditioner (PTAC)') && x.packaged_air_cooled_dx
+        !x.cs.nil? && x.ref_ids(x.d, 'HeatingSourceID').empty? && x.zone_equipment_only && x.ptac_cooling
       end
       return nil unless heating.length == 1 && cooling.length == 1
 
-      hx = heating.first
+      hx, variant = heating.first
       cx = cooling.first
+      configuration = TERMINAL_COOLING_CONFIGURATIONS[variant]
       delivery_ids = [hx.d, cx.d].map { |el| el.attributes['ID'] }
-      ids = delivery_ids + [hx.hs, cx.cs].map { |el| el.attributes['ID'] }
+      ids = delivery_ids + [hx.hs, cx.cs, hx.hp].compact.map { |el| el.attributes['ID'] }
       premises = _premises(hx.d, sys)
       order = ->(list) { list.sort_by { |p| [p[:type], p[:id]] } }
       failures = []
       failures << 'Missing LinkedPremises on Delivery or HVACSystem' if premises.empty?
       failures << 'Heating and cooling deliveries must serve the same premises' if order.call(premises) != order.call(_premises(cx.d, sys))
-      failures += self.class.central_air_absent(hx).map { |p| "#{p} must be absent" }
       failures << 'Z/FanBased/FanBasedDistributionType must be absent' if cx.fan_based_distribution(cx.z)
-      [
-        ['A/AirDeliveryType', hx.guard(hx.a, 'AirDeliveryType', 'Central fan')],
-        ['A/ReheatSource', hx.guard(hx.a, 'ReheatSource', 'None')],
-        ['H/Furnace/FurnaceType', hx.guard(hx.h, 'Furnace/FurnaceType', FURNACE_TYPES)],
+      guards = [
         ['CS/PrimaryFuel', cx.guard(cx.cs, 'PrimaryFuel', ELECTRIC)],
         ['CS/CoolingMedium', cx.guard(cx.cs, 'CoolingMedium', AIR_REFRIGERANT)]
-      ].each { |name, ok| failures << "Guard failed: #{name}" unless ok }
+      ]
+      case variant
+      when 'central_gas_furnace'
+        failures += self.class.central_air_absent(hx).map { |p| "#{p} must be absent" }
+        guards += [
+          ['A/AirDeliveryType', hx.guard(hx.a, 'AirDeliveryType', 'Central fan')],
+          ['A/ReheatSource', hx.guard(hx.a, 'ReheatSource', 'None')],
+          ['H/Furnace/FurnaceType', hx.guard(hx.h, 'Furnace/FurnaceType', FURNACE_TYPES)]
+        ]
+      when 'electric_baseboard'
+        guards << ['HS/PrimaryFuel', hx.guard(hx.hs, 'PrimaryFuel', ELECTRIC)]
+      when 'hot_water_baseboard'
+        guards << ['plant quantities', hx.plant_quantities_one(hx.hp)]
+      end
+      guards.each { |name, ok| failures << "Guard failed: #{name}" unless ok }
       sys_id = sys.attributes['ID']
       unless failures.empty?
-        return [_result(:conflicting_input, sys_id, ids, premises, nil, failures, configuration: TERMINAL_COOLING_CONFIGURATION),
-                delivery_ids]
+        return [_result(:conflicting_input, sys_id, ids, premises, nil, failures, configuration:), delivery_ids]
       end
 
+      arguments = { 'heating_source' => variant }
+      arguments['boiler_fuel'] = hx.hot_water_boiler_fuel if variant == 'hot_water_baseboard'
       quantity = ->(record) { Context.texts(record, 'Quantity').first || '1' }
       messages = ["Source inventory kept as recorded: #{hx.hs.attributes['ID']} quantity #{quantity.call(hx.hs)}, " \
                   "#{cx.cs.attributes['ID']} quantity #{quantity.call(cx.cs)}. Generated: one PTAC per model zone in scope."]
       [_result(:match, sys_id, ids, premises, [:delivery_pair, *delivery_ids], messages,
-               configuration: TERMINAL_COOLING_CONFIGURATION, measure: TERMINAL_COOLING_MEASURE,
-               measure_arguments: { 'heating_source' => 'central_gas_furnace' }),
+               configuration:, measure: TERMINAL_COOLING_MEASURE, measure_arguments: arguments),
        delivery_ids]
     end
 
