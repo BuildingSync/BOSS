@@ -91,7 +91,7 @@ An HVACSystem whose heating and cooling are delivered separately maps to the gem
 
 The heating-only Delivery may instead be `ZoneEquipment/Convection` with `ConvectionType` `Perimeter baseboard`, heated by `ElectricResistance` (`electric_baseboard`) or by a `SourceHeatingPlantID` whose plant has `Boiler/BoilerType` `Hot water` (`hot_water_baseboard`, `boiler_fuel` from the plant `PrimaryFuel`). A single `ZoneEquipment` Delivery that references both the PTAC CoolingSource and such a hot-water HeatingSource maps to `hot_water_ptac_coil`.
 
-See `Example_NYC_Energy_Efficiency_Report_Property_2_l200.xml`, which restates the user-defined fields of `Example_NYC_Energy_Efficiency_Report_Property_2.xml` as standard elements. BOSS writes `baseline/hvac_mapping_report.json` with the plan status, the HVAC steps, and the messages. Add `--require_l200` (`require_l200: true`) to raise an error instead of falling back.
+See `spec/files/v2.7.0/l200_hvac/Example_NYC_Energy_Efficiency_Report_Property_2_l200.xml`, which restates the user-defined fields of `spec/files/v2.7.0/Example_NYC_Energy_Efficiency_Report_Property_2.xml` as standard elements. BOSS writes `baseline/hvac_mapping_report.json` with the plan status, the HVAC steps, and the messages. Add `--require_l200` (`require_l200: true`) to raise an error instead of falling back.
 
 ```bash
 bundle exec boss write_baseline_osw my_buildingsync.xml -o ./output_dir --require_l200

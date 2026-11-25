@@ -56,7 +56,8 @@ topology_configs = {
   'l200_hvac/l200_ptac_ventilation_only.xml' => [['hvac_ptac', 'hvac_ventilation_only'], '90.1-2013'],
   'l200_hvac/l200_pthp_doas.xml' => [['hvac_pthp', 'hvac_doas'], '90.1-2013'],
   'l200_hvac/l200_four_pipe_fan_coil_doas.xml' => [['hvac_four_pipe_fan_coil', 'hvac_doas'], '90.1-2013'],
-  'l200_hvac/l200_vrf_doas.xml' => [['hvac_vrf', 'hvac_doas'], '90.1-2013']
+  'l200_hvac/l200_vrf_doas.xml' => [['hvac_vrf', 'hvac_doas'], '90.1-2013'],
+  'l200_hvac/Example_NYC_Energy_Efficiency_Report_Property_2_l200.xml' => [['hvac_heating_with_terminal_cooling'], 'DOE Ref Pre-1980']
 }
 topology_configs = {} if ENV['BOSS_SMOKE'] == '1'
 

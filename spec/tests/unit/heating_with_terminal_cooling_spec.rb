@@ -14,7 +14,7 @@ require 'BOSS/constants'
 
 RSpec.describe 'Central furnace with cooling-only PTAC' do
   files_dir = File.expand_path('../../files/v2.7.0', __dir__)
-  l200_path = File.join(files_dir, 'Example_NYC_Energy_Efficiency_Report_Property_2_l200.xml')
+  l200_path = File.join(files_dir, 'l200_hvac', 'Example_NYC_Energy_Efficiency_Report_Property_2_l200.xml')
   original_path = File.join(files_dir, 'Example_NYC_Energy_Efficiency_Report_Property_2.xml')
 
   def hvac_systems(path)

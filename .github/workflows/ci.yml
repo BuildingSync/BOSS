@@ -19,7 +19,7 @@ concurrency:
 env:
   # Pinned commit (buildingsync-measures-gem add-comstock-erv-preset, adds comstock_erv) of the
   # sibling checkout that config/external_measure_repos.yml loads via local_path.
-  BSYNC_MEASURES_REF: 483efc02b5a6c2f1386afd9cae45b72ab4b0a37d
+  BSYNC_MEASURES_REF: 6ee630f71d5da01df79a2c0dab40b1e978c51556
 
 jobs:
   unit:
