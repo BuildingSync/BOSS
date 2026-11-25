@@ -89,7 +89,7 @@ module BOSS
       steps << { measure_dir_name: RECOVERY_MEASURE, arguments: {} } if !recovery.empty?
       # ComStock picks HRV or ERV by climate zone; an audited ERV gets ComStock's ERV values.
       steps << ERV_STEP if recovery.any? { |r| r.measure_arguments['ventilation_type'] == ERV_TYPE }
-      Plan.new(status: :topology, steps:, messages: [])
+      Plan.new(status: :topology, steps:, messages: (results + recovery).flat_map(&:messages).uniq)
     end
 
     # @return [Array<String>] HVACSystem IDs that measures name as alternatives or modified systems
@@ -111,6 +111,15 @@ module BOSS
 
     # @return [Array<Hash>] premises, or one Building premise when Section links cover the building
     def self.normalize_premises(premises, document)
+      linked_buildings = premises.select { |premise| premise[:type] == 'Building' }
+      if linked_buildings.length == 1 && premises.length > 1
+        # A Building link already covers that building's Sections.
+        building_id = linked_buildings.first[:id]
+        section_ids = REXML::XPath.match(document, "//*[local-name()='Building'][@ID='#{building_id}']" \
+                                                   "/*[local-name()='Sections']/*[local-name()='Section']/@ID").map(&:value)
+        others = premises - linked_buildings
+        return linked_buildings if others.all? { |premise| premise[:type] == 'Section' && section_ids.include?(premise[:id]) }
+      end
       building_id = covered_building_id(premises, document)
       building_id ? [{ type: 'Building', id: building_id }] : premises
     end

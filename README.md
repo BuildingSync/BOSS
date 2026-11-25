@@ -81,6 +81,20 @@ BOSS also falls back when:
 
 On fallback, BOSS uses the `system_type` mapping below with `add_hvac` set to `true`, and logs a warning explaining why.
 
+#### Central furnace with cooling-only PTACs
+
+An HVACSystem whose heating and cooling are delivered separately maps to the gem's `hvac_heating_with_terminal_cooling` measure (`heating_source` `central_gas_furnace`). This is read from standard BuildingSync elements only:
+
+- one Delivery with `CentralAirDistribution` that references only a gas `Furnace` HeatingSource (`HeatingMedium` `Air`);
+- one Delivery with `ZoneEquipment` that references only a CoolingSource whose `DXSystemType` is `Packaged terminal air conditioner (PTAC)`;
+- both serve the same premises. A `MechanicalVentilation` record without a `VentilationType` linked only to these deliveries is treated as an annotation.
+
+See `Example_NYC_Energy_Efficiency_Report_Property_2_l200.xml`, which restates the user-defined fields of `Example_NYC_Energy_Efficiency_Report_Property_2.xml` as standard elements. BOSS writes `baseline/hvac_mapping_report.json` with the plan status, the HVAC steps, and the messages. Add `--require_l200` (`require_l200: true`) to raise an error instead of falling back.
+
+```bash
+bundle exec boss write_baseline_osw my_buildingsync.xml -o ./output_dir --require_l200
+```
+
 Integration simulations currently cover the packaged rooftop heat pump, with and without recovery (`Example_ASHRAE_L2_Report_l200_erv.xml`, an edited derivative of `Example_ASHRAE_L2_Report.xml`); the other configurations are covered by unit specs.
 
 ## OpenStudio Compatibility Version

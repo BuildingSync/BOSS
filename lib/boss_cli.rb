@@ -16,9 +16,11 @@ module BOSS
     option :epw_path, :aliases => "-w", :desc => "path to weather file. If not given, one is derived from the BUILDINGSYNC_FILE."
     option :standard_version, :aliases => "-v", :desc => "building standard to use (eg ASHRAE90.1 or CaliforniaTitle24). Defaults to ASHRAE90.1"
     option :run, :aliases => "-r", :desc => "if set, will also run the baseline"
+    option :require_l200, :type => :boolean, :default => false, :desc => "fail instead of falling back to create_typical_building_from_model HVAC"
     def write_baseline_osw(buildingsync_file)
       standard_version = options[:standard_version] || ASHRAE90_1
-      osw_path = BOSS::Boss.write_baseline_osw(buildingsync_file, options[:output_path], options[:epw_path], standard_version)
+      osw_path = BOSS::Boss.write_baseline_osw(buildingsync_file, options[:output_path], options[:epw_path], standard_version,
+                                               require_l200: options[:require_l200])
       puts "Baseline OSW written to: #{osw_path}"
       if options[:run]
         puts "running!"

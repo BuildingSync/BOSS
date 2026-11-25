@@ -483,6 +483,9 @@ module BOSS
       failed
     end
 
+    TERMINAL_COOLING_CONFIGURATION = 'Central furnace with cooling-only PTAC'
+    TERMINAL_COOLING_MEASURE = 'hvac_heating_with_terminal_cooling'
+
     # @param hvac_systems [REXML::Element] an HVACSystems element (or any parent of HVACSystem elements)
     # @return [Array<Result>]
     def select(hvac_systems)
@@ -521,9 +524,70 @@ module BOSS
       end
 
       folded = _economizer_folds(deliveries)
-      results = deliveries.reject { |d| ventilation_links.key?(d.attributes['ID']) || folded.key?(d.attributes['ID']) }
-                          .map { |delivery| _select_delivery(sys, delivery, index) }
-      results + others.map { |other| _select_other(sys, other, index, ventilation_links, folded) }
+      open = deliveries.reject { |d| ventilation_links.key?(d.attributes['ID']) || folded.key?(d.attributes['ID']) }
+      pair, paired_ids = _heating_with_terminal_cooling(sys, open, index)
+      paired_ids ||= []
+      annotations, others = others.partition do |other|
+        links = Context.nodes(other, 'LinkedDeliveryIDs/LinkedDeliveryID').map { |l| l.attributes['IDref'] }
+        !paired_ids.empty? && _ventilation_annotation?(other) && !links.empty? && (links - paired_ids).empty?
+      end
+      unless annotations.empty?
+        pair.record_ids |= annotations.map { |o| o.attributes['ID'] }
+        pair.messages << 'MechanicalVentilation without a VentilationType names no separate ventilation equipment.'
+      end
+      results = open.reject { |d| paired_ids.include?(d.attributes['ID']) }
+                    .map { |delivery| _select_delivery(sys, delivery, index) }
+      [pair].compact + results + others.map { |other| _select_other(sys, other, index, ventilation_links, folded) }
+    end
+
+    # A heating-only central-air delivery from a gas furnace plus a cooling-only zone-equipment
+    # delivery from PTACs, in the same HVACSystem and premises, is one central-heating,
+    # terminal-cooling configuration.
+    # @return [Array(Result, Array<String>), nil] the result and the delivery IDs it covers
+    def _heating_with_terminal_cooling(sys, deliveries, index)
+      contexts = deliveries.map { |d| Context.new(sys, d, index) }
+      return nil unless contexts.all? { |x| x.conflicts.empty? }
+
+      heating = contexts.select do |x|
+        !x.hs.nil? && x.ref_ids(x.d, 'CoolingSourceID').empty? && !x.a.nil? && x.gas_air_furnace
+      end
+      cooling = contexts.select do |x|
+        !x.cs.nil? && x.ref_ids(x.d, 'HeatingSourceID').empty? && x.zone_equipment_only &&
+          x.eq(x.dx, 'DXSystemType', 'Packaged terminal air conditioner (PTAC)') && x.packaged_air_cooled_dx
+      end
+      return nil unless heating.length == 1 && cooling.length == 1
+
+      hx = heating.first
+      cx = cooling.first
+      delivery_ids = [hx.d, cx.d].map { |el| el.attributes['ID'] }
+      ids = delivery_ids + [hx.hs, cx.cs].map { |el| el.attributes['ID'] }
+      premises = _premises(hx.d, sys)
+      order = ->(list) { list.sort_by { |p| [p[:type], p[:id]] } }
+      failures = []
+      failures << 'Missing LinkedPremises on Delivery or HVACSystem' if premises.empty?
+      failures << 'Heating and cooling deliveries must serve the same premises' if order.call(premises) != order.call(_premises(cx.d, sys))
+      failures += self.class.central_air_absent(hx).map { |p| "#{p} must be absent" }
+      failures << 'Z/FanBased/FanBasedDistributionType must be absent' if cx.fan_based_distribution(cx.z)
+      [
+        ['A/AirDeliveryType', hx.guard(hx.a, 'AirDeliveryType', 'Central fan')],
+        ['A/ReheatSource', hx.guard(hx.a, 'ReheatSource', 'None')],
+        ['H/Furnace/FurnaceType', hx.guard(hx.h, 'Furnace/FurnaceType', FURNACE_TYPES)],
+        ['CS/PrimaryFuel', cx.guard(cx.cs, 'PrimaryFuel', ELECTRIC)],
+        ['CS/CoolingMedium', cx.guard(cx.cs, 'CoolingMedium', AIR_REFRIGERANT)]
+      ].each { |name, ok| failures << "Guard failed: #{name}" unless ok }
+      sys_id = sys.attributes['ID']
+      unless failures.empty?
+        return [_result(:conflicting_input, sys_id, ids, premises, nil, failures, configuration: TERMINAL_COOLING_CONFIGURATION),
+                delivery_ids]
+      end
+
+      quantity = ->(record) { Context.texts(record, 'Quantity').first || '1' }
+      messages = ["Source inventory kept as recorded: #{hx.hs.attributes['ID']} quantity #{quantity.call(hx.hs)}, " \
+                  "#{cx.cs.attributes['ID']} quantity #{quantity.call(cx.cs)}. Generated: one PTAC per model zone in scope."]
+      [_result(:match, sys_id, ids, premises, [:delivery_pair, *delivery_ids], messages,
+               configuration: TERMINAL_COOLING_CONFIGURATION, measure: TERMINAL_COOLING_MEASURE,
+               measure_arguments: { 'heating_source' => 'central_gas_furnace' }),
+       delivery_ids]
     end
 
     ECONOMIZER_ONLY_CHILDREN = ['AirSideEconomizer', 'SupplyAirTemperatureResetControl', 'StaticPressureResetControl'].freeze

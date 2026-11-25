@@ -22,8 +22,9 @@ module BOSS
     # @param output_dir [String]
     # @param epw_file_path [String] if provided, full/path/to/my.epw
     # @param standard_to_be_used [String]
+    # @param require_l200 [Boolean] raise instead of falling back to create_typical HVAC
     class << self
-    def write_baseline_osw(xml_file_path, output_dir, epw_file_path, standard_to_be_used)
+    def write_baseline_osw(xml_file_path, output_dir, epw_file_path, standard_to_be_used, require_l200: false)
       # check file exists
       if !File.exist?(xml_file_path)
         message = "File '#{xml_file_path}' does not exist"
@@ -36,7 +37,13 @@ module BOSS
       bsync_doc = REXML::Document.new(xml_data, ignore_whitespace_nodes: :all)
       bsync_reader = BOSS::BuildingSyncReader.new(bsync_doc, epw_file_path, standard_to_be_used)
 
-      baseline_osw = build_baseline_osw(bsync_reader)
+      hvac_plan = plan_baseline_hvac(bsync_reader)
+      if require_l200 && !hvac_plan.topology?
+        message = "L200 HVAC topology required but the baseline would fall back: #{hvac_plan.messages.join(' ')}"
+        OpenStudio.logFree(OpenStudio::Error, 'BOSS.write_baseline_osw', message)
+        raise message
+      end
+      baseline_osw = build_baseline_osw(bsync_reader, hvac_plan:)
 
       # write to file
       workflow_dir = File.join(output_dir, 'baseline')
@@ -45,6 +52,9 @@ module BOSS
       File.open(osw_path, 'w') do |file|
         file << JSON.pretty_generate(baseline_osw)
       end
+      report = { status: hvac_plan.status, hvac_steps: hvac_plan.steps.map { |step| step[:measure_dir_name] },
+                 messages: hvac_plan.messages }
+      File.write(File.join(workflow_dir, 'hvac_mapping_report.json'), JSON.pretty_generate(report))
       osw_path
     end
 
@@ -71,8 +81,15 @@ module BOSS
 
       private
 
+    def plan_baseline_hvac(bsync_reader)
+      hvac_systems = bsync_reader.get_hvac_systems_xml
+      BaselineHvacPlanner.new
+                         .plan(hvac_systems, bsync_reader.get_standard_template,
+                               exclude_system_ids: BaselineHvacPlanner.proposed_system_ids(hvac_systems))
+    end
+
     # Returns a new, unsaved baseline OSW hash for the given reader.
-    def build_baseline_osw(bsync_reader)
+    def build_baseline_osw(bsync_reader, hvac_plan: plan_baseline_hvac(bsync_reader))
       # start with an empty baseline workflow
       file = File.read(EMPTY_BASELINE_OSW_PATH)
       baseline_osw = JSON.parse(file, symbolize_names: true)
@@ -82,9 +99,6 @@ module BOSS
       OSWArgPopulator::populate_change_building_location_args(baseline_osw, bsync_reader)
 
       OSWArgPopulator::populate_create_bar_from_building_type_ratios_args(baseline_osw, bsync_reader)
-      hvac_systems = bsync_reader.get_hvac_systems_xml
-      hvac_plan = BaselineHvacPlanner.new.plan(hvac_systems, bsync_reader.get_standard_template,
-                                               exclude_system_ids: BaselineHvacPlanner.proposed_system_ids(hvac_systems))
       OSWArgPopulator::populate_create_typical_building_from_model_args(baseline_osw, bsync_reader,
                                                                         add_hvac: !hvac_plan.topology?)
       if hvac_plan.topology?
